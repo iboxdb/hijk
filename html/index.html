@@ -1,0 +1,19 @@
+<html>
+    <script src="javascript/loadimg.js" type="text/javascript"></script>
+    <script   type="text/javascript">
+        function hello() {
+            var req = new XMLHttpRequest();
+            req.open("GET", "/api/helloworld2", true);
+            req.onreadystatechange = function() {
+                if (req.readyState === 4 && (req.status === 304 || req.status === 200)) {
+                    var o = eval("(" + req.responseText + ")");
+                    alert(o.MSG);
+                }
+            };
+            req.send();
+        }
+    </script>
+    <body onload="loadimg(document.getElementById('img1'), 'images/D3UIb.PNG')">
+        <p> <img id="img1" src="" alt="" onclick="hello();"></p>
+    </body>
+</html>
