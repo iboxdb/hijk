@@ -59,3 +59,64 @@ hijk.api.helloworld3 = function() {
 1. copy index.html to ./html/ directory
 2. open browser and input http://localhost:8080
 3. click image
+
+ 
+####WebAPI Arguments
+
+```
+hijk.api.get = function(map,request) {
+    var msg = {
+        url: request.getRequestURI(),
+        id : map.id[0],
+        name: map.name[0] 
+    };
+    return msg;
+};
+```
+
+1. save
+2. open browser and input http://localhost:8080/api/get?id=99&name=andy
+
+
+####Define Database's Table
+
+```
+hijk.table.table1 = {
+    data: {"id": 0, "name": ""},
+    key: ["id"],
+    index: [["name"]]
+}
+```
+
+####Insert Objects to Table
+
+```
+hijk.api.table1_insert = function() {
+    var tid = hijk.db.id();
+    var v = {
+        id: tid,
+        name: "name" + tid,
+        fieldA: "fieldA" + tid,
+        fieldB: "fieldB" + tid
+    };
+    if (hijk.db.insert("table1", v)) {
+        return tid;
+    } else {
+        return -1;
+    }
+};
+```
+
+####Read Data from Database
+
+```
+hijk.api.table1_select_sum = function() {
+    var r = 0;
+    hijk.db.select("from table1", [],
+            function(v) {
+                r += v.id; 
+            });
+    return r;
+};
+```
+
