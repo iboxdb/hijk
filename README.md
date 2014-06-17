@@ -1,4 +1,4 @@
-###hijk -Javascript WebAPI Development Package
+###hijk Javascript WebAPI Development Package
 
 ####Getting Started
 
@@ -23,9 +23,10 @@ hijk.api.helloworld3 = function() {
 };
 ```
 
-copy demo.js to ./js/ directory
+copy demo.js to ./js/ directory, service will automatically load javascript files when it is changed.
 
 open browser input http://localhost:8080/api/helloworld
 
+use /edit/js/demo.js can edit files online, 
 
 ![PIC](https://github.com/iboxdb/hijk/raw/master/html/images/HIJK.png)
