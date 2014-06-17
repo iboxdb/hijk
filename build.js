@@ -12,7 +12,7 @@ print("-----------------------");
 var hijk = {
     debug: true,
     title: "html iboxdb javascript kits",
-    version: "0.1",
+    version: "0.1.0.1",
     server: {
         port: 8080,
         server: null
@@ -91,13 +91,27 @@ try {
             }
             return array;
         },
+        AppTagField: Java.type("iBoxDB.LocalServer.Local").class.getField("AppTag"),
+        AppTag: function(obj, value) {
+            if (obj instanceof JType.TypeLocal) {
+                if (value) {
+                    JType.AppTagField.set(obj, value);
+                    return value;
+                } else {
+                    return JType.AppTagField.get(obj);
+                }
+            } else {
+                return null;
+            }
+        },
         JSONLocal: function(local) {
             if (local) {
                 if ((typeof local === "string") || local instanceof String || local instanceof java.lang.String) {
                     return local;
                 }
-                if (local.AppTag) {
-                    return local.AppTag;
+                var ch = JType.AppTag(local);
+                if (ch) {
+                    return ch;
                 }
                 if (local instanceof java.util.Map) {
                     var v = {};
@@ -105,9 +119,7 @@ try {
                         v[f] = local[f];
                     }
                     var json = JSON.stringify(v);
-                    if (local instanceof JType.TypeLocal) {
-                        local.AppTag = json;
-                    }
+                    JType.AppTag(local, json);
                     return json;
                 } else if (local instanceof java.lang.Iterable) {
                     var r = [];
