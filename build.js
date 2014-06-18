@@ -12,7 +12,7 @@ print("-----------------------");
 var hijk = {
     debug: true,
     title: "html iboxdb javascript kits",
-    version: "0.1.0.1",
+    version: "0.1.0.2",
     server: {
         port: 8080,
         server: null
@@ -104,10 +104,12 @@ try {
                 return null;
             }
         },
-        JSONLocal: function(local) {
+        JSONLocal: function(local, force) {
             if (local) {
-                if ((typeof local === "string") || local instanceof String || local instanceof java.lang.String) {
-                    return local;
+                if (!force) {
+                    if ((typeof local === "string") || local instanceof String || local instanceof java.lang.String) {
+                        return local;
+                    }
                 }
                 var ch = JType.AppTag(local);
                 if (ch) {
@@ -131,7 +133,7 @@ try {
                 } else if (local instanceof Array) {
                     var r = [];
                     for (var i = 0; i < local.length; i++) {
-                        r.push(JType.JSONLocal(local[i]));
+                        r.push(JType.JSONLocal(local[i], true));
                     }
                     return "[" + r.join(",") + "]";
                 } else {
@@ -428,6 +430,9 @@ if (JType) {
                         if (r !== api_process_false) {
                             response.setContentType("text/html;charset=utf-8");
                             response.setStatus(200);
+                            response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+                            response.setHeader("Pragma", "no-cache");
+                            response.setDateHeader("Expires", 0);
                             response.getWriter().println(r);
                             baseRequest.setHandled(true);
                         } else {
