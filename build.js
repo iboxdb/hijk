@@ -12,7 +12,7 @@ print("-----------------------");
 var hijk = {
     debug: true,
     title: "html iboxdb javascript kits",
-    version: "0.1.0.2",
+    version: "0.1.0.3",
     server: {
         port: 8080,
         server: null
@@ -34,7 +34,10 @@ function build_run() {
     var ff = (new java.io.File("kits")).listFiles();
     var cp = "";
     for (var i = 0; i < ff.length; i++) {
-        cp += (ff[i].getAbsolutePath() + ";");
+        if (cp.length > 0) {
+            cp += ";";
+        }
+        cp += ff[i].getAbsolutePath();
     }
     cp = "jjs -cp " + cp + "  build.js";
     print(cp);
@@ -48,7 +51,7 @@ function build_run() {
         ra.close();
     }
     writefile("run.bat", cp);
-    writefile("run.sh", "#!/usr/bin/env bash\r\n" + cp);
+    writefile("run.sh", "#!/usr/bin/env bash\n" + cp.toString().replaceAll(";", ":"));
     print("use run.bat/sh");
 }
 
@@ -466,7 +469,8 @@ if (JType) {
             if (c === ')') {
                 count--;
                 if (count <= 0) {
-                    var s = script;
+                    var s = "(function(){" +
+                            script + "})()";
                     script = "";
                     count = 0;
                     try {
@@ -563,6 +567,8 @@ if (JType) {
         debug_load_system();
     } else {
         DebugEditor = function() {
+        };
+        debug_load_system = function() {
         };
         load_system();
     }
