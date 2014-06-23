@@ -6,7 +6,11 @@
 
 1. set PATH to /JAVA **8**_HOME/bin
 2. **jjs** build.js
-3. run
+3. Linux  
+  chmod +x run.sh  
+  ./run.sh
+4. Windows  
+  run.bat
 
  
 #####Write a Javascript File, demo.js
