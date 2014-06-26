@@ -9,12 +9,17 @@ print("HTTP Engine    : jetty http://www.eclipse.org/jetty/");
 print("Database Engine: iBoxDB http://www.iboxdb.com");
 print("Script Engine  : Nashorn JDK8");
 print("-----------------------");
+
 var hijk = {
     debug: true,
     title: "html iboxdb javascript kits",
-    version: "0.1.0.3",
+    version: "0.2",
     server: {
         port: 8080,
+        sslport: 8081,
+        keystore: 'keystore.jks',
+        keypassword: 'localhost',
+        threadCount: 512,
         server: null
     },
     exception: null,
@@ -52,6 +57,10 @@ function build_run() {
     }
     writefile("run.bat", cp);
     writefile("run.sh", "#!/usr/bin/env bash\n" + cp.toString().replaceAll(";", ":"));
+    try {
+        java.lang.Runtime.getRuntime().exec("chmod +x run.sh").waitFor();
+    } catch (e) {
+    }
     print("use run.bat/sh");
 }
 
@@ -59,6 +68,7 @@ try {
     var JType = {
         TypeLocal: Java.type("iBoxDB.LocalServer.Local"),
         TypeDB: Java.type("iBoxDB.LocalServer.DB"),
+        TypeBoxSystem: Java.type("iBoxDB.LocalServer.BoxSystem"),
         TypeByteArray: Java.type("byte[]"),
         TypeRandomAccessFile: Java.type("java.io.RandomAccessFile"),
         TypeFile: Java.type("java.io.File"),
@@ -94,14 +104,15 @@ try {
             }
             return array;
         },
-        AppTagField: Java.type("iBoxDB.LocalServer.Local").class.getField("AppTag"),
+        Lock: function(fun) {
+            JType.TypeBoxSystem.Lock(fun, null);
+        },
         AppTag: function(obj, value) {
             if (obj instanceof JType.TypeLocal) {
                 if (value) {
-                    JType.AppTagField.set(obj, value);
-                    return value;
+                    return obj.writeAppTag(value);
                 } else {
-                    return JType.AppTagField.get(obj);
+                    return obj.readAppTag();
                 }
             } else {
                 return null;
@@ -164,190 +175,200 @@ try {
 
 if (JType) {
     function load_system() {
+        function load_system_inner() {
 
-        function boxwrap(_box) {
-            this.box = _box;
-        }
-        boxwrap.prototype = {
-            insert: function(table, value) {
-                value = JType.Map(value);
-                return this.box.bind(table).insert(value);
-            },
-            select: function(ql, params, fun) {
-                if (!(params instanceof Array)) {
-                    params = [params];
-                }
-                var r = this.box.select(ql, params);
-                if (fun) {
-                    JType.ForEach(r, fun);
-                }
-                return r;
-            },
-            selectCount: function(ql, params) {
-                if (!(params instanceof Array)) {
-                    params = [params];
-                }
-                var r = this.box.selectCount(ql, params);
-                return r;
-            },
-            selectKey: function(table, key) {
-                if (!(key instanceof Array)) {
-                    key = [key];
-                }
-                return this.box.bind(table, Java.to(key)).select();
-            },
-            update: function(table, value) {
-                value = JType.Map(value);
-                return this.box.bind(table, value).update(value);
-            },
-            delete: function(table, key) {
-                if (!(key instanceof Array)) {
-                    key = [key];
-                }
-                return this.box.bind(table, Java.to(key)).delete();
-            },
-            id: function(pos) {
-                if (pos === undefined) {
-                    pos = 0;
-                }
-                return JType.int(this.box.newId(pos, 1));
+            function boxwrap(_box) {
+                this.box = _box;
             }
-        };
-        function dbwrap(db) {
-            this.close = function() {
-                db.getDatabase().close();
-            };
-            this.insert = function(table, value) {
-                if (!(value instanceof Array)) {
-                    value = [value];
-                }
-                return db.insert(table, JType.MapArray(value));
-            };
-            this.select = function(ql, params, fun) {
-                if (!(params instanceof Array)) {
-                    params = [params];
-                }
-                var r = db.select(ql, params);
-                if (fun) {
-                    JType.ForEach(r, fun);
-                }
-                return r;
-            };
-            this.selectCount = function(ql, params) {
-                if (!(params instanceof Array)) {
-                    params = [params];
-                }
-                var r = db.selectCount(ql, params);
-                return r;
-            };
-            this.selectKey = function(table, key) {
-                if (!(key instanceof Array)) {
-                    key = [key];
-                }
-                return db.selectKey(table, Java.to(key));
-            };
-            this.update = function(table, value) {
-                if (!(value instanceof Array)) {
-                    value = [value];
-                }
-                return db.update(table, JType.MapArray(value));
-            };
-            this.replace = function(table, value) {
-                if (!(value instanceof Array)) {
-                    value = [value];
-                }
-                return db.replace(table, JType.MapArray(value));
-            };
-            this.delete = function(table, key) {
-                if (!(key instanceof Array)) {
-                    key = [key];
-                }
-                return db.delete(table, Java.to(key));
-            };
-            this.id = function(pos) {
-                if (pos === undefined) {
-                    pos = 0;
-                }
-                return db.id(pos);
-            };
-            this.cube = function(transaction) {
-                var box = db.cube();
-                try {
-                    var wbox = new boxwrap(box);
-                    if (transaction(wbox)) {
-                        return box.commit().toString();
+            boxwrap.prototype = {
+                insert: function(table, value) {
+                    value = JType.Map(value);
+                    this.trigger('before_insert', table, value);
+                    var r = this.box.bind(table).insert(value);
+                    this.trigger('after_insert', table, value);
+                    return r;
+                },
+                select: function(ql, params, fun) {
+                    if (!(params instanceof Array)) {
+                        params = [params];
                     }
-                } finally {
-                    box.close();
+                    var r = this.box.select(ql, params);
+                    if (fun) {
+                        JType.ForEach(r, fun);
+                    }
+                    return r;
+                },
+                selectCount: function(ql, params) {
+                    if (!(params instanceof Array)) {
+                        params = [params];
+                    }
+                    var r = this.box.selectCount(ql, params);
+                    return r;
+                },
+                selectKey: function(table, key) {
+                    if (!(key instanceof Array)) {
+                        key = [key];
+                    }
+                    return this.box.bind(table, Java.to(key)).select();
+                },
+                update: function(table, value) {
+                    value = JType.Map(value);
+                    return this.box.bind(table, value).update(value);
+                },
+                delete: function(table, key) {
+                    if (!(key instanceof Array)) {
+                        key = [key];
+                    }
+                    return this.box.bind(table, Java.to(key)).delete();
+                },
+                id: function(pos) {
+                    if (pos === undefined) {
+                        pos = 0;
+                    }
+                    return JType.int(this.box.newId(pos, 1));
+                },
+                trigger: function(event, table, keyOrValue) {
+                   // print(event + " - " + table + " :" + JType.JSONLocal(keyOrValue));
                 }
             };
-        }
-
-
-        function load_database() {
-            JType.TypeDB.root("iboxdb/");
-            var db = new JType.TypeDB();
-
-
-            for (var t in hijk.table) {
-                var tableName = t;
-                var data = hijk.table[tableName].data;
-                var key = hijk.table[tableName].key;
-                var index = hijk.table[tableName].index;
-                try {
-                    db.getConfig().ensureTable(tableName, JType.Map(data), key);
-                    if (index) {
-                        for (var i = 0; i < index.length; i++) {
-                            db.getConfig().ensureIndex(tableName, JType.Map(data), index[i]);
+            function dbwrap(db) {
+                this.close = function() {
+                    db.getDatabase().close();
+                };
+                this.insert = function(table, value) {
+                    if (!(value instanceof Array)) {
+                        value = [value];
+                    }
+                    return db.insert(table, JType.MapArray(value));
+                };
+                this.select = function(ql, params, fun) {
+                    if (!(params instanceof Array)) {
+                        params = [params];
+                    }
+                    var r = db.select(ql, params);
+                    if (fun) {
+                        JType.ForEach(r, fun);
+                    }
+                    return r;
+                };
+                this.selectCount = function(ql, params) {
+                    if (!(params instanceof Array)) {
+                        params = [params];
+                    }
+                    var r = db.selectCount(ql, params);
+                    return r;
+                };
+                this.selectKey = function(table, key) {
+                    if (!(key instanceof Array)) {
+                        key = [key];
+                    }
+                    return db.selectKey(table, Java.to(key));
+                };
+                this.update = function(table, value) {
+                    if (!(value instanceof Array)) {
+                        value = [value];
+                    }
+                    return db.update(table, JType.MapArray(value));
+                };
+                this.replace = function(table, value) {
+                    if (!(value instanceof Array)) {
+                        value = [value];
+                    }
+                    return db.replace(table, JType.MapArray(value));
+                };
+                this.delete = function(table, key) {
+                    if (!(key instanceof Array)) {
+                        key = [key];
+                    }
+                    return db.delete(table, Java.to(key));
+                };
+                this.id = function(pos) {
+                    if (pos === undefined) {
+                        pos = 0;
+                    }
+                    return db.id(pos);
+                };
+                this.cube = function(transaction) {
+                    var box = db.cube();
+                    try {
+                        var wbox = new boxwrap(box);
+                        if (transaction(wbox)) {
+                            return box.commit().toString();
                         }
+                    } finally {
+                        box.close();
+                    }
+                };
+            }
+
+
+            function load_database() {
+                JType.TypeDB.root("iboxdb/");
+                var db = new JType.TypeDB();
+
+
+                for (var t in hijk.table) {
+                    var tableName = t;
+                    var data = hijk.table[tableName].data;
+                    var key = hijk.table[tableName].key;
+                    var index = hijk.table[tableName].index;
+                    try {
+                        db.getConfig().ensureTable(tableName, JType.Map(data), key);
+                        if (index) {
+                            for (var i = 0; i < index.length; i++) {
+                                db.getConfig().ensureIndex(tableName, JType.Map(data), index[i]);
+                            }
+                        }
+                    } catch (e) {
+                        hijk.dbexception = "database setting error: [" + tableName + "]";
+                        throw e;
+                    }
+                }
+
+
+                try {
+                    db = db.open();
+                    if (!db) {
+                        print("previous db setting");
+                        db = db.open();
                     }
                 } catch (e) {
-                    hijk.dbexception = "database setting error: [" + tableName + "]";
-                    throw e;
-                }
-            }
-
-
-            try {
-                db = db.open();
-                if (!db) {
-                    print("previous db setting");
+                    print(e.message);
                     db = db.open();
                 }
-            } catch (e) {
-                print(e.message);
-                db = db.open();
+                return new dbwrap(db);
             }
-            return new dbwrap(db);
+
+            if (hijk.db) {
+                hijk.db.close();
+            }
+            hijk.db = null;
+            hijk.api = {};
+            hijk.table = {};
+            try {
+                var ff = (new java.io.File("js")).listFiles();
+                var paths = [];
+                for (var i = 0; i < ff.length; i++) {
+                    var path = ff[i].getAbsolutePath();
+                    if (path.endsWith(".js")) {
+                        paths.push(path);
+                    }
+                }
+                paths.sort();
+                for (var i = 0; i < paths.length; i++) {
+                    load(paths[i]);
+                }
+                hijk.db = load_database();
+                hijk.exception = null;
+                hijk.dbexception = "";
+                print("Started " + new Date());
+            } catch (e) {
+                hijk.exception = e;
+                print(toExceptionString(e));
+            }
         }
 
-        if (hijk.db) {
-            hijk.db.close();
-        }
-        hijk.db = null;
-        hijk.api = {};
-        hijk.table = {};
-        try {
-            var ff = (new java.io.File("js")).listFiles();
-            var paths = [];
-            for (var i = 0; i < ff.length; i++) {
-                var path = ff[i].getAbsolutePath();
-                if (path.endsWith(".js")) {
-                    paths.push(path);
-                }
-            }
-            paths.sort();
-            for (var i = 0; i < paths.length; i++) {
-                load(paths[i]);
-            }
-            hijk.db = load_database();
-            hijk.exception = null;
-            hijk.dbexception = "";
-            print("Started " + new Date());
-        } catch (e) {
-            hijk.exception = e;
-            print(toExceptionString(e));
-        }
+        JType.Lock(load_system_inner);
     }
 
     hijk.server.last_load = 0;
@@ -407,14 +428,24 @@ if (JType) {
     }
 
     function http_server_jetty() {
-        JType.TypeServer = Java.type("org.eclipse.jetty.server.Server");
-        JType.TypeResourceHandler = Java.type("org.eclipse.jetty.server.handler.ResourceHandler");
-        JType.TypeHandler = Java.type("org.eclipse.jetty.server.Handler");
-        var html = new JType.TypeResourceHandler();
+
+        var Server = Java.type("org.eclipse.jetty.server.Server");
+        var ResourceHandler = Java.type("org.eclipse.jetty.server.handler.ResourceHandler");
+        var Handler = Java.type("org.eclipse.jetty.server.Handler");
+
+        var ServerConnector = Java.type("org.eclipse.jetty.server.ServerConnector");
+        var HttpConfiguration = Java.type("org.eclipse.jetty.server.HttpConfiguration");
+        var SecureRequestCustomizer = Java.type("org.eclipse.jetty.server.SecureRequestCustomizer");
+        var SslContextFactory = Java.type("org.eclipse.jetty.util.ssl.SslContextFactory");
+        var SslConnectionFactory = Java.type("org.eclipse.jetty.server.SslConnectionFactory");
+        var HttpConnectionFactory = Java.type("org.eclipse.jetty.server.HttpConnectionFactory");
+        var QueuedThreadPool = Java.type("org.eclipse.jetty.util.thread.QueuedThreadPool");
+
+        var html = new ResourceHandler();
         html.setDirectoriesListed(hijk.debug);
         html.setResourceBase("./html");
         html.setWelcomeFiles(["index.html"]);
-        var api = new JType.TypeHandler(
+        var api = new Handler(
                 {
                     setServer: function(server) {
                         html.setServer(server);
@@ -446,7 +477,31 @@ if (JType) {
                     }
                 }
         );
-        var server = new JType.TypeServer(hijk.server.port);
+
+        var threadPool = new QueuedThreadPool(hijk.server.threadCount);
+        var server = new Server(threadPool);
+
+        var connector = new ServerConnector(server);
+        connector.setPort(hijk.server.port);
+        server.addConnector(connector);
+
+        if (hijk.server.sslport > 0) {
+            var https = new HttpConfiguration();
+            https.addCustomizer(new SecureRequestCustomizer());
+
+            //SSL: keytool -genkey -alias server -keyalg RSA -keysize 1024 -keystore keystore.jks
+            var sslContextFactory = new SslContextFactory();
+            sslContextFactory.setKeyStorePath(hijk.server.keystore);
+            sslContextFactory.setKeyStorePassword(hijk.server.keypassword);
+
+            var sslConnector = new ServerConnector(server,
+                    [new SslConnectionFactory(sslContextFactory, "http/1.1"),
+                        new HttpConnectionFactory(https)]);
+            sslConnector.setPort(hijk.server.sslport);
+            server.addConnector(sslConnector);
+        }
+
+        //handler
         server.setHandler(api);
         try {
             server.start();
@@ -521,7 +576,8 @@ if (JType) {
             }
             return "";
         }
-        function write_file(path, txt) {
+
+        function write_file(path, txt, append) {
             var file = new JType.TypeFile(path);
             if (file.isDirectory()) {
                 return;
@@ -532,9 +588,14 @@ if (JType) {
             file = new JType.TypeFile(path);
             rf = new JType.TypeRandomAccessFile(file, "rw");
             try {
-                rf.setLength(0);
-                rf.seek(0);
-                rf.write(txt.getBytes(JType.UTF8));
+                if (append) {
+                    rf.seek(rf.length());
+                    txt = "\r\n//----" + (new Date()) + "----\r\n" + txt;
+                } else {
+                    rf.setLength(0);
+                    rf.seek(0);
+                }
+                rf.write(txt.toString().getBytes(JType.UTF8));
             } finally {
                 rf.close();
             }
@@ -551,8 +612,8 @@ if (JType) {
         }
 
         if (map.js) {
-            write_file(fname + ".bak", script);
-            write_file(fname, map.js[0]);
+            write_file(fname + ".bak", script, true);
+            write_file(fname, map.js[0], false);
             script = read_file(fname);
             msg = " saved " + JType.Date(new Date());
         }
