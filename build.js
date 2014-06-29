@@ -1,7 +1,8 @@
 
 // PATH=JAVA8_HOME/bin
-// jjs build.js
+// jjs build.js  or  jjs build.js -- http_port_8080 https_port_8081
 // run
+"use strict";
 
 print("Javascript WebAPI Development Package");
 print("-----------------------");
@@ -13,10 +14,10 @@ print("-----------------------");
 var hijk = {
     debug: true,
     title: "html iboxdb javascript kits",
-    version: "0.2",
+    version: "0.2.1 developing",
     server: {
-        port: 8080,
-        sslport: 8081,
+        port: arguments[0],
+        sslport: arguments[1],
         keystore: 'keystore.jks',
         keypassword: 'localhost',
         threadCount: 512,
@@ -24,10 +25,40 @@ var hijk = {
     },
     exception: null,
     dbexception: null,
+    dbaddress: 1,
     db: null,
     api: {},
     table: {}
 };
+
+if (hijk.server.sslport === undefined && hijk.server.port === undefined) {
+    hijk.server.port = 8080;
+    hijk.server.sslport = 8081;
+}
+if (hijk.server.port === undefined) {
+    hijk.server.port = 0;
+}
+if (hijk.server.sslport === undefined) {
+    hijk.server.sslport = 0;
+}
+hijk.server.port = parseInt(hijk.server.port);
+hijk.server.sslport = parseInt(hijk.server.sslport);
+if (hijk.server.port === hijk.server.sslport) {
+    hijk.server.sslport = 0;
+}
+
+hijk.dbaddress = hijk.server.port !== 0 ? hijk.server.port : hijk.server.sslport;
+if (hijk.dbaddress === 0) {
+    hijk.dbaddress = 1;
+}
+
+java.lang.Thread.currentThread().setContextClassLoader(
+        new java.lang.ClassLoader({
+            loadClass: function(str) {
+                return Java.type(str).class;
+            }
+        }
+        ));
 
 function build_run() {
     var dirs = ["html", "iboxdb", "js", "kits"];
@@ -45,6 +76,7 @@ function build_run() {
         cp += ff[i].getAbsolutePath();
     }
     cp = "jjs -cp " + cp + "  build.js";
+    cp += " -- " + hijk.server.port + " " + hijk.server.sslport;
     print(cp);
     print("-----------------------");
     function writefile(path, txt) {
@@ -55,32 +87,101 @@ function build_run() {
         ra.writeBytes(txt);
         ra.close();
     }
-    writefile("run.bat", cp);
-    writefile("run.sh", "#!/usr/bin/env bash\n" + cp.toString().replaceAll(";", ":"));
-    try {
-        java.lang.Runtime.getRuntime().exec("chmod +x run.sh").waitFor();
-    } catch (e) {
+
+    for each (var x in ["", hijk.dbaddress]) {
+        writefile("run" + x + ".bat", cp);
+        writefile("run" + x + ".sh", "#!/usr/bin/env bash\n" + cp.toString().replaceAll(";", ":"));
+        try {
+            java.lang.Runtime.getRuntime().exec("chmod +x run" + x + ".sh").waitFor();
+        } catch (e) {
+        }
     }
+
     print("use run.bat/sh");
 }
 
 try {
+
     var JType = {
-        TypeLocal: Java.type("iBoxDB.LocalServer.Local"),
-        TypeDB: Java.type("iBoxDB.LocalServer.DB"),
-        TypeBoxSystem: Java.type("iBoxDB.LocalServer.BoxSystem"),
-        TypeByteArray: Java.type("byte[]"),
-        TypeRandomAccessFile: Java.type("java.io.RandomAccessFile"),
-        TypeFile: Java.type("java.io.File"),
-        TypeString: Java.type("java.lang.String"),
-        UTF8: java.nio.charset.Charset.forName("UTF-8"),
-        Random: new java.util.Random(),
+        Extend: function(dest, src) {
+            for (var x in src) {
+                dest[x] = src[x];
+            }
+        },
         int: function(str) {
             return java.lang.Integer.valueOf(str);
         },
         long: function(str) {
             return java.lang.Long.valueOf(str);
         },
+        map: function() {
+            return new java.util.concurrent.ConcurrentHashMap();
+        },
+        queue: function() {
+            return new java.util.concurrent.ConcurrentLinkedQueue();
+        },
+        http: new function() {
+            var HttpClient = Java.type("org.eclipse.jetty.client.HttpClient");
+            var SslContextFactory = Java.type("org.eclipse.jetty.util.ssl.SslContextFactory");
+            var sslContextFactory = new SslContextFactory(true);
+            var httpClient = new HttpClient(sslContextFactory);
+            httpClient.start();
+            this.get = function(uri) {
+                var response = httpClient.newRequest(uri).send();
+                return response.getContentAsString();
+            };
+            this.post = function(uri, params) {
+                var client = httpClient.POST(uri);
+                for (var x in params) {
+                    client.param(x, params[x]);
+                }
+                var response = client.send();
+                return  response.getContentAsString();
+            };
+        },
+        socket: (function() {
+            var WebSocketClient = Java.type("org.eclipse.jetty.websocket.client.WebSocketClient");
+            var WebSocketListener = Java.type("org.eclipse.jetty.websocket.api.WebSocketListener");
+            var URI = Java.type("java.net.URI");
+            return function(uri) {
+                var client = new WebSocketClient();
+                client.start();
+                var socket = new JType.JSocket();
+                client.connect(
+                        new WebSocketListener({
+                            onWebSocketBinary: function(bytes, i, i1) {
+                            },
+                            onWebSocketError: function(cause) {
+                            },
+                            onWebSocketText: function(message) {
+                                socket._callmessage(message);
+                            },
+                            onWebSocketClose: function(statusCode, reason) {
+                                socket._callclose(reason);
+                            },
+                            onWebSocketConnect: function(sess) {
+                                socket._callconnect(sess);
+                            }
+                        })
+                        , new URI(uri)).get();
+
+                return socket;
+            };
+        })()
+
+
+    };
+    JType.Extend(JType, {
+        TypeBoxSystem: Java.type("iBoxDB.LocalServer.BoxSystem"),
+        TypeLocal: Java.type("iBoxDB.LocalServer.Local"),
+        Random: new java.util.Random(),
+        UTF8: java.nio.charset.Charset.forName("UTF-8"),
+        NewAppID: (function() {
+            var al = new java.util.concurrent.atomic.AtomicLong();
+            return function() {
+                return al.getAndIncrement();
+            }
+        })(),
         Date: function(d) {
             if (d) {
                 return new java.util.Date(d.getTime());
@@ -95,20 +196,20 @@ try {
                 }
                 return new java.util.HashMap(map);
             } else {
-                return map;
+                return this.map();
             }
         },
         MapArray: function(array) {
             for (var i = 0; i < array.length; i++) {
-                array[i] = JType.Map(array[i]);
+                array[i] = this.Map(array[i]);
             }
             return array;
         },
         Lock: function(fun) {
-            JType.TypeBoxSystem.Lock(fun, null);
+            this.TypeBoxSystem.Lock(fun, null);
         },
         AppTag: function(obj, value) {
-            if (obj instanceof JType.TypeLocal) {
+            if (obj instanceof this.TypeLocal) {
                 if (value) {
                     return obj.writeAppTag(value);
                 } else {
@@ -125,7 +226,7 @@ try {
                         return local;
                     }
                 }
-                var ch = JType.AppTag(local);
+                var ch = this.AppTag(local);
                 if (ch) {
                     return ch;
                 }
@@ -135,19 +236,19 @@ try {
                         v[f] = local[f];
                     }
                     var json = JSON.stringify(v);
-                    JType.AppTag(local, json);
+                    this.AppTag(local, json);
                     return json;
                 } else if (local instanceof java.lang.Iterable) {
                     var r = [];
                     local = local.iterator();
                     while (local.hasNext()) {
-                        r.push(JType.JSONLocal(local.next()));
+                        r.push(this.JSONLocal(local.next()));
                     }
                     return "[" + r.join(",") + "]";
                 } else if (local instanceof Array) {
                     var r = [];
                     for (var i = 0; i < local.length; i++) {
-                        r.push(JType.JSONLocal(local[i], true));
+                        r.push(this.JSONLocal(local[i], true));
                     }
                     return "[" + r.join(",") + "]";
                 } else {
@@ -166,15 +267,74 @@ try {
                     }
                 }
             }
+        },
+        _JSocket_sessions: null,
+        JSocket: function() {
+            this.uid = JType.NewAppID();
+            this.session = null;
+            this._onmessage = null;
+            this.msgbuffer = JType.queue();
+
+            this.onmessage = function(fun) {
+                this._onmessage = fun;
+                this._flushmsg();
+                return this;
+            };
+            this._onclose = null;
+            this.onclose = function(fun) {
+                this._onclose = fun;
+                return this;
+            };
+            this.send = function(msg) {
+                try {
+                    this.session.getRemote().sendStringByFuture(msg);
+                    return this;
+                } catch (e) {
+                    return e;
+                }
+            };
+            this.close = function() {
+                try {
+                    this.session.close();
+                    return this;
+                } catch (e) {
+                    return e;
+                }
+            };
+            this._callconnect = function(sess) {
+                this.session = sess;
+                this.remoteid = sess.getRemoteAddress().toString();
+                JType._JSocket_sessions.put(this.uid, sess);
+            };
+            this._callclose = function(reason) {
+                JType._JSocket_sessions.remove(this.uid);
+                if (this._onclose) {
+                    this._onclose(reason);
+                }
+            };
+            this._callmessage = function(msg) {
+                debug_load_system();
+                this.msgbuffer.add(msg);
+                this._flushmsg();
+            };
+            this._flushmsg = function() {
+                if (this._onmessage) {
+                    var msg = this.msgbuffer.poll();
+                    while (msg) {
+                        this._onmessage(msg);
+                        msg = this.msgbuffer.poll();
+                    }
+                }
+            };
         }
-    };
+    });
 } catch (e) {
     build_run();
     exit();
 }
 
 if (JType) {
-    function load_system() {
+    var load_system = function() {
         function load_system_inner() {
 
             function boxwrap(_box) {
@@ -183,9 +343,7 @@ if (JType) {
             boxwrap.prototype = {
                 insert: function(table, value) {
                     value = JType.Map(value);
-                    this.trigger('before_insert', table, value);
                     var r = this.box.bind(table).insert(value);
-                    this.trigger('after_insert', table, value);
                     return r;
                 },
                 select: function(ql, params, fun) {
@@ -228,7 +386,7 @@ if (JType) {
                     return JType.int(this.box.newId(pos, 1));
                 },
                 trigger: function(event, table, keyOrValue) {
-                   // print(event + " - " + table + " :" + JType.JSONLocal(keyOrValue));
+                    print(event + " - " + table + " :" + JType.JSONLocal(keyOrValue));
                 }
             };
             function dbwrap(db) {
@@ -303,10 +461,9 @@ if (JType) {
 
 
             function load_database() {
-                JType.TypeDB.root("iboxdb/");
-                var db = new JType.TypeDB();
-
-
+                var TypeDB = Java.type("iBoxDB.LocalServer.DB");
+                TypeDB.root("iboxdb/");
+                var db = new TypeDB(hijk.dbaddress);
                 for (var t in hijk.table) {
                     var tableName = t;
                     var data = hijk.table[tableName].data;
@@ -343,8 +500,23 @@ if (JType) {
                 hijk.db.close();
             }
             hijk.db = null;
+
             hijk.api = {};
             hijk.table = {};
+
+
+            if (JType._JSocket_sessions) {
+                redo: for (var x in JType._JSocket_sessions) {
+                    var y = JType._JSocket_sessions[x];
+                    if (y) {
+                        y.close();
+                    } else {
+                        break redo;
+                    }
+                }
+            }
+            JType._JSocket_sessions = JType.map();
+
             try {
                 var ff = (new java.io.File("js")).listFiles();
                 var paths = [];
@@ -369,13 +541,13 @@ if (JType) {
         }
 
         JType.Lock(load_system_inner);
-    }
+    };
 
     hijk.server.last_load = 0;
     var debug_load_system = (function() {
         var fileCache = {};
         return function() {
-            if (hijk.debug && ((java.lang.System.currentTimeMillis() - hijk.server.last_load) > 5000)) {
+            if ((java.lang.System.currentTimeMillis() - hijk.server.last_load) > 5000) {
                 var changed = "";
                 var ff = (new java.io.File("js")).listFiles();
                 for (var i = 0; i < ff.length; i++) {
@@ -398,41 +570,83 @@ if (JType) {
         };
     })();
 
-    var api_process_false = {};
-    function api_process(request, response) {
-        if (request.getRequestURI().startsWith("/edit/")) {
-            var r = DebugEditor(request.getParameterMap(), request, response);
-            return  JType.JSONLocal(r);
-        } else if (request.getRequestURI().startsWith("/api/")) {
-            debug_load_system();
-            if (hijk.exception) {
-                return toExceptionString(hijk.exception);
-            } else {
-                hijk.server.last_load = java.lang.System.currentTimeMillis();
-                var ks = request.getRequestURI().split("/");
-                var fun = hijk.api[ks[2]];
-                if (fun) {
-                    try {
-                        var r = fun(request.getParameterMap(), request, response);
-                        return JType.JSONLocal(r);
-                    } catch (e) {
-                        return toExceptionString(e);
-                    }
-                } else {
-                    return JType.JSONLocal({MSG: 'NotAPI'});
-                }
-            }
+    var api_process = function(request, response) {
+        debug_load_system();
+        if (hijk.exception) {
+            return toExceptionString(hijk.exception);
         } else {
-            return api_process_false;
+            hijk.server.last_load = java.lang.System.currentTimeMillis();
+            var ks = request.getRequestURI().split("/");
+            var fun = hijk.api[ks[2]];
+            if (fun) {
+                try {
+                    var r = fun(request.getParameterMap(), request, response);
+                    return JType.JSONLocal(r);
+                } catch (e) {
+                    return toExceptionString(e);
+                }
+            } else {
+                return JType.JSONLocal({MSG: 'NotAPI'});
+            }
         }
-    }
+    };
 
-    function http_server_jetty() {
+
+    JType.WebSocketListener = Java.type("org.eclipse.jetty.websocket.api.WebSocketListener");
+
+    var ws_api_process = function(req, resp) {
+
+        var socket = new JType.JSocket();
+
+        return new JType.WebSocketListener({
+            onWebSocketBinary: function(bytes, i, i1) {
+            },
+            onWebSocketError: function(cause) {
+            },
+            onWebSocketText: function(message) {
+                socket._callmessage(message);
+            },
+            onWebSocketClose: function(statusCode, reason) {
+                socket._callclose(reason);
+            },
+            onWebSocketConnect: function(sess) {
+                debug_load_system();
+                socket._callconnect(sess);
+                socket.map = req.getHttpServletRequest().getParameterMap();
+
+                var ks = req.getHttpServletRequest().getRequestURI().toString().split("/");
+                this.callfun(ks[2], socket);
+            },
+            callfun: function(api, socket) {
+                if (hijk.exception) {
+                    socket.send(toExceptionString(hijk.exception));
+                    socket.close();
+                } else {
+                    hijk.server.last_load = java.lang.System.currentTimeMillis();
+                    var fun = hijk.api[ api ];
+                    if (fun) {
+                        try {
+                            fun(socket, req, resp);
+                        } catch (e) {
+                            var msg = toExceptionString(e);
+                            socket.send(msg);
+                            socket.close();
+                        }
+                    } else {
+                        socket.send(JType.JSONLocal({MSG: 'NotAPI'}));
+                        socket.close();
+                    }
+                }
+
+            }
+        });
+    };
+
+    var http_server_jetty = function() {
 
         var Server = Java.type("org.eclipse.jetty.server.Server");
         var ResourceHandler = Java.type("org.eclipse.jetty.server.handler.ResourceHandler");
         var Handler = Java.type("org.eclipse.jetty.server.Handler");
-
         var ServerConnector = Java.type("org.eclipse.jetty.server.ServerConnector");
         var HttpConfiguration = Java.type("org.eclipse.jetty.server.HttpConfiguration");
         var SecureRequestCustomizer = Java.type("org.eclipse.jetty.server.SecureRequestCustomizer");
@@ -440,35 +654,79 @@ if (JType) {
         var SslConnectionFactory = Java.type("org.eclipse.jetty.server.SslConnectionFactory");
         var HttpConnectionFactory = Java.type("org.eclipse.jetty.server.HttpConnectionFactory");
         var QueuedThreadPool = Java.type("org.eclipse.jetty.util.thread.QueuedThreadPool");
+        var WebSocketServlet = Java.type("org.eclipse.jetty.websocket.servlet.WebSocketServlet");
+        var ServletContextHandler = Java.type("org.eclipse.jetty.servlet.ServletContextHandler");
+        var ServletHolder = Java.type("org.eclipse.jetty.servlet.ServletHolder");
+        var WebSocketCreator = Java.type("org.eclipse.jetty.websocket.servlet.WebSocketCreator");
+        var WebSocketHandler = Java.type("org.eclipse.jetty.websocket.server.WebSocketHandler");
+
 
         var html = new ResourceHandler();
         html.setDirectoriesListed(hijk.debug);
         html.setResourceBase("./html");
         html.setWelcomeFiles(["index.html"]);
+
+        var ws = new WebSocketServlet({
+            configure: function(factory) {
+                factory.setCreator(
+                        new WebSocketCreator({
+                            createWebSocket: function(req, resp) {
+                                return ws_api_process(req, resp);
+                            }
+                        }));
+            }});
+
+        var servlet = new ServletContextHandler(
+                ServletContextHandler.NO_SESSIONS
+                );
+        servlet.setContextPath("/");
+
+        var holderEvents = new ServletHolder(ws);
+        servlet.addServlet(holderEvents, "/");
+
         var api = new Handler(
                 {
                     setServer: function(server) {
                         html.setServer(server);
+                        servlet.setServer(server);
                     },
                     getServer: function() {
-                        return html.getServer();
+                        return servlet.getServer();
                     },
                     isRunning: function() {
-                        return true;
+                        return servlet.isRunning();
+                    },
+                    start: function() {
+                        html.start();
+                        servlet.start();
                     },
                     handle: function(target,
                             baseRequest,
                             request,
-                            response) {
-                        var r = api_process(request, response);
-                        if (r !== api_process_false) {
+                            response
+                            ) {
+                        var r = null;
+                        if (request.getRequestURI().startsWith("/edit/")) {
+                            r = DebugEditor(request.getParameterMap(), request, response);
+                            r = JType.JSONLocal(r);
+                        } else if (request.getRequestURI().startsWith("/api/ws_")) {
+                            // WebSocket 
+                            servlet.handle(target, baseRequest,
+                                    request,
+                                    response);
+                        } else if (request.getRequestURI().startsWith("/api/")) {
+                            //Http Https
+                            r = api_process(request, response);
+                        }
+                        if (baseRequest.isHandled()) {
+                        } else if (r !== null) {
+                            baseRequest.setHandled(true);
                             response.setContentType("text/html;charset=utf-8");
                             response.setStatus(200);
                             response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
                             response.setHeader("Pragma", "no-cache");
                             response.setDateHeader("Expires", 0);
                             response.getWriter().println(r);
-                            baseRequest.setHandled(true);
                         } else {
                             html.handle(target, baseRequest,
                                     request,
@@ -477,41 +735,40 @@ if (JType) {
                     }
                 }
         );
-
         var threadPool = new QueuedThreadPool(hijk.server.threadCount);
         var server = new Server(threadPool);
 
-        var connector = new ServerConnector(server);
-        connector.setPort(hijk.server.port);
-        server.addConnector(connector);
+        if (hijk.server.port !== 0) {
+            var connector = new ServerConnector(server);
+            connector.setPort(Math.abs(hijk.server.port));
+            server.addConnector(connector);
+        }
 
-        if (hijk.server.sslport > 0) {
+        if (hijk.server.sslport !== 0) {
             var https = new HttpConfiguration();
             https.addCustomizer(new SecureRequestCustomizer());
-
             //SSL: keytool -genkey -alias server -keyalg RSA -keysize 1024 -keystore keystore.jks
             var sslContextFactory = new SslContextFactory();
             sslContextFactory.setKeyStorePath(hijk.server.keystore);
             sslContextFactory.setKeyStorePassword(hijk.server.keypassword);
-
             var sslConnector = new ServerConnector(server,
                     [new SslConnectionFactory(sslContextFactory, "http/1.1"),
                         new HttpConnectionFactory(https)]);
-            sslConnector.setPort(hijk.server.sslport);
+            sslConnector.setPort(Math.abs(hijk.server.sslport));
             server.addConnector(sslConnector);
         }
 
-        //handler
         server.setHandler(api);
         try {
             server.start();
         } catch (ex) {
             print(ex.message);
+            exit();
         }
         return server;
     }
 
-    function run_script() {
+    var run_script = function() {
         var count = 0;
         var script = "";
         print("jjs: (exit())");
@@ -539,7 +796,7 @@ if (JType) {
         }
     }
 
-    function toExceptionString(e) {
+    var toExceptionString = function(e) {
         return  hijk.dbexception + " " +
                 e.message + " " +
                 e.toString() + " " +
@@ -554,22 +811,25 @@ if (JType) {
         if (((!fname.startsWith("js/")) && (!fname.startsWith("html/"))) || (fname.contains(".."))) {
             return "Error Path , example edit/js/demo.js ,  edit/html/index.html ";
         }
-
+        var TypeRandomAccessFile = Java.type("java.io.RandomAccessFile");
+        var TypeBytes = Java.type("byte[]");
+        var TypeFile = Java.type("java.io.File");
+        var TypeString = Java.type("java.lang.String");
         function read_file(path) {
-            var file = new JType.TypeFile(path);
+            var file = new TypeFile(path);
             if (!file.exists()) {
                 var dirPath = path.substring(0, path.lastIndexOf("/"));
-                (new JType.TypeFile(dirPath)).mkdirs();
+                (new TypeFile(dirPath)).mkdirs();
             }
             if (file.isDirectory()) {
                 return "";
             }
-            var rf = new JType.TypeRandomAccessFile(file, "rw");
+            var rf = new TypeRandomAccessFile(file, "rw");
             try {
                 if (rf.length() > 0) {
-                    var bs = new JType.TypeByteArray(rf.length());
+                    var bs = new TypeBytes(rf.length());
                     rf.read(bs);
-                    return new JType.TypeString(bs, JType.UTF8);
+                    return new TypeString(bs, JType.UTF8);
                 }
             } finally {
                 rf.close();
@@ -578,15 +838,15 @@ if (JType) {
         }
 
         function write_file(path, txt, append) {
-            var file = new JType.TypeFile(path);
+            var file = new TypeFile(path);
             if (file.isDirectory()) {
                 return;
             }
             if (!txt) {
                 txt = "";
             }
-            file = new JType.TypeFile(path);
-            rf = new JType.TypeRandomAccessFile(file, "rw");
+            file = new TypeFile(path);
+            rf = new TypeRandomAccessFile(file, "rw");
             try {
                 if (append) {
                     rf.seek(rf.length());

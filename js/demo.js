@@ -21,6 +21,84 @@ hijk.api.get = function(map, request, response) {
     return msg;
 };
 
+// socket = new WebSocket('ws://localhost:8080/api/ws_helloname');
+// web scoket , open two browsers
+var ws_hellonameusers = JType.map();
+hijk.api.ws_helloname = function(socket, request, response) {
+    socket.onclose(
+            function() {
+                ws_hellonameusers.remove(socket.uid);
+            }
+    );
+    ws_hellonameusers.put(socket.uid, socket);
+
+    socket.name = "";
+    var sendall = function(msg) {
+        //notice all online users 
+        for (var id in ws_hellonameusers) {
+            if (ws_hellonameusers[id] !== socket) {
+                ws_hellonameusers[id].send(msg + " From " + socket.name + "." + socket.remoteid);
+            }
+        }
+    }
+
+    socket.send("Name: ")
+            .onmessage(function(name) {
+                socket.name = name;
+                sendall("Welcome " + name);
+                socket.send("Hello " + name + " message:")
+                        .onmessage(function(msg) {
+                            if (msg === "close") {
+                                socket.close();
+                            } else {
+                                sendall("Message: " + msg);
+                            }
+                        });
+            });
+};
+
+// api bridge
+hijk.api.helloworld_bridge = function() {
+    var msg = JType.http.get("http://localhost:8080/api/helloworld");
+    return "Bridge:" + msg;
+}
+hijk.api.get_bridge = function() {
+    var msg = JType.http.post("http://localhost:8080/api/get", {name: 'Andy', id: 100});
+    return "Bridge:" + msg;
+};
+
+
+hijk.api.ws_helloname_bridge = function(socket) {
+    var ls = JType.socket("ws://localhost:8080/api/ws_helloname");
+    ls.onclose(function() {
+        socket.close();
+    });
+    socket.onclose(function() {
+        ls.close();
+    });
+
+    ls.onmessage(function(msg) {
+        socket.send("bs_" + msg);
+    }
+    );
+
+    socket.onmessage(function(msg) {
+        ls.send("bc_" + msg);
+    }
+    );
+};
+
+//distributed program , use this server to calculate results
+hijk.api.eval = function(map, request) {
+    if (request.getRemoteAddr() !== "") {
+        var script = map.script[0];
+        return eval("(" + script + ")();");
+    } else {
+        return "";
+    }
+};
+
+
 //table will automatically created
 hijk.table.table1 = {
     data: {"id": 0, "name": ""},

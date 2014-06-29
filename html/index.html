@@ -12,8 +12,51 @@
             };
             req.send();
         }
+
+
+        var gsocket = null;
+        function ws_hello() {
+            if (gsocket) {
+                var msg = window.prompt("New Message:", 'Second');
+                gsocket.send(msg);
+                return;
+            }
+            var socket = new WebSocket('ws://localhost:8080/api/ws_helloname');
+
+            socket.onopen = function(event) {
+                gsocket = socket;
+                socket.onmessage = function(event) {
+                    var name = window.prompt(event.data, 'Andy');
+                    socket.send(name);
+
+                    socket.onmessage = function(event) {
+                        var msg = window.prompt(event.data, 'None');
+
+                        socket.send(msg);
+                        socket.onmessage = function(event) {
+                            alert(event.data);
+                        }
+                    }
+                };
+
+                socket.onclose = function(event) {
+                    gsocket = null;
+                    alert('socket has closed');
+                };
+
+            };
+        }
     </script>
-    <body onload="loadimg(document.getElementById('img1'), 'images/D3UIb.PNG')">
+    <body onload="loadimg(document.getElementById('img1'), 'images/D3UIb.PNG');">
         <p> <img id="img1" src="" alt="" onclick="hello();"></p>
-    </body>
+        <p><button onclick="ws_hello();">WebSocket</button></p>
+        <p>
+        <form action="/api/eval"  method="post">
+            <textarea style='width: 300px; height: 100px' name='script'>
+function(){ print(request); return hijk.server.port; }
+            </textarea><br>
+            <button type='submit'  >Run On Server</button>
+        </form>
+    </p>
+</body>
 </html>
