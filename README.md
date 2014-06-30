@@ -6,11 +6,7 @@
 
 1. set PATH to /JAVA **8**_HOME/bin
 2. **jjs** build.js
-3. Linux  
-  chmod +x run.sh  
-  ./run.sh
-4. Windows  
-  run.bat
+3. run.bat
 
  
 #####Write a Javascript File, demo.js
@@ -82,6 +78,18 @@ hijk.api.get = function(map,request) {
 2. open browser and input http://localhost:8080/api/get?id=99&name=andy
 
 
+####WebSocket WebAPI
+
+```
+hijk.api.ws_helloname = function(socket, request, response) {
+    socket.send("Name: ")
+          .onmessage(function(name) { 
+                sendall("Welcome " + name); 
+          });
+
+};
+```
+
 ####Define Database's Table
 
 ```
@@ -92,7 +100,7 @@ hijk.table.table1 = {
 }
 ```
 
-####Insert Objects to Table
+####Insert Object to Table
 
 ```
 hijk.api.table1_insert = function() {
