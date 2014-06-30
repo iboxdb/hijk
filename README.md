@@ -86,9 +86,19 @@ hijk.api.ws_helloname = function(socket, request, response) {
           .onmessage(function(name) { 
                 sendall("Welcome " + name); 
           });
-
 };
 ```
+
+
+####WebAPI Bridge
+
+```
+hijk.api.get_bridge = function() {
+    var msg = JType.http.post("http://localhost:8080/api/get", {name: 'Andy', id: 100});
+    return "Bridge:" + msg;
+};
+```
+
 
 ####Define Database's Table
 
