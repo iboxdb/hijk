@@ -2,6 +2,15 @@
 // PATH=JAVA8_HOME/bin
 // jjs build.js  or  jjs build.js -- http_port_8080 https_port_8081
 // run
+
+//Embedded 
+//ScriptEngineManager factory = new ScriptEngineManager();
+//ScriptEngine engine = factory.getEngineByName("nashorn");
+//engine.eval("load('_DIR_/build.js')");
+//Project Properties -> Run -> Working Directory = __DIR__
+//print(__FILE__, __LINE__, __DIR__);
+
+
 "use strict";
 
 print("Javascript WebAPI Development Package");
@@ -14,7 +23,7 @@ print("-----------------------");
 var hijk = {
     debug: true,
     title: "html iboxdb javascript kits",
-    version: "0.2.1 developing",
+    version: "0.2.2",
     server: {
         port: arguments[0],
         sslport: arguments[1],
@@ -140,12 +149,17 @@ try {
             };
         },
         socket: (function() {
+            // unstable version WebSocketClient
             var WebSocketClient = Java.type("org.eclipse.jetty.websocket.client.WebSocketClient");
             var WebSocketListener = Java.type("org.eclipse.jetty.websocket.api.WebSocketListener");
             var URI = Java.type("java.net.URI");
+
+            var client = new WebSocketClient();
+            client.setMaxIdleTimeout(java.lang.Long.MAX_VALUE / 2);
+            client.start();
+
             return function(uri) {
-                var client = new WebSocketClient();
-                client.start();
+
                 var socket = new JType.JSocket();
                 client.connect(
                         new WebSocketListener({
@@ -205,8 +219,11 @@ try {
             }
             return array;
         },
-        Lock: function(fun) {
-            this.TypeBoxSystem.Lock(fun, null);
+        Lock: function(fun, o) {
+            if (!o) {
+                o = null;
+            }
+            this.TypeBoxSystem.Lock(fun, o);
         },
         AppTag: function(obj, value) {
             if (obj instanceof this.TypeLocal) {
@@ -273,6 +290,7 @@ try {
             this.uid = JType.NewAppID();
             this.session = null;
             this._onmessage = null;
+            this.remoteid = "";
             this.msgbuffer = JType.queue();
 
             this.onmessage = function(fun) {
@@ -290,6 +308,7 @@ try {
                     this.session.getRemote().sendStringByFuture(msg);
                     return this;
                 } catch (e) {
+                    print(__LINE__, e.message);
                     return e;
                 }
             };
@@ -302,9 +321,10 @@ try {
                 }
             };
             this._callconnect = function(sess) {
+                debug_load_system();
+                JType._JSocket_sessions.put(this.uid, sess);
                 this.session = sess;
                 this.remoteid = sess.getRemoteAddress().toString();
-                JType._JSocket_sessions.put(this.uid, sess);
             };
             this._callclose = function(reason) {
                 JType._JSocket_sessions.remove(this.uid);
@@ -316,12 +336,16 @@ try {
                 debug_load_system();
                 this.msgbuffer.add(msg);
                 this._flushmsg();
+
             };
             this._flushmsg = function() {
                 if (this._onmessage) {
                     var msg = this.msgbuffer.poll();
                     while (msg) {
-                        this._onmessage(msg);
+                        var newonmessage = this._onmessage(msg);
+                        if (newonmessage) {
+                            this._onmessage = newonmessage;
+                        }
                         msg = this.msgbuffer.poll();
                     }
                 }
@@ -384,9 +408,6 @@ if (JType) {
                         pos = 0;
                     }
                     return JType.int(this.box.newId(pos, 1));
-                },
-                trigger: function(event, table, keyOrValue) {
-                    print(event + " - " + table + " :" + JType.JSONLocal(keyOrValue));
                 }
             };
             function dbwrap(db) {
@@ -560,7 +581,7 @@ if (JType) {
                         fileCache[path] = ll;
                     }
                 }
-                if (changed.length > 0) {
+                if (changed.toString().length() > 0) {
                     print("-----------------------");
                     print("Reload: " + changed);
                     load_system();
@@ -610,10 +631,9 @@ if (JType) {
                 socket._callclose(reason);
             },
             onWebSocketConnect: function(sess) {
-                debug_load_system();
                 socket._callconnect(sess);
-                socket.map = req.getHttpServletRequest().getParameterMap();
 
+                socket.map = req.getHttpServletRequest().getParameterMap();
                 var ks = req.getHttpServletRequest().getRequestURI().toString().split("/");
                 this.callfun(ks[2], socket);
             },
@@ -668,6 +688,7 @@ if (JType) {
 
         var ws = new WebSocketServlet({
             configure: function(factory) {
+                factory.getPolicy().setIdleTimeout(java.lang.Long.MAX_VALUE / 2);
                 factory.setCreator(
                         new WebSocketCreator({
                             createWebSocket: function(req, resp) {
@@ -766,7 +787,7 @@ if (JType) {
             exit();
         }
         return server;
-    }
+    };
 
     var run_script = function() {
         var count = 0;
@@ -794,7 +815,7 @@ if (JType) {
                 }
             }
         }
-    }
+    };
 
     var toExceptionString = function(e) {
         return  hijk.dbexception + " " +
@@ -804,7 +825,7 @@ if (JType) {
                 e.lineNumber + " column:" +
                 e.columnNumber + "  " +
                 e.stack + "  ";
-    }
+    };
 
     var DebugEditor = function(map, request, response) {
         var fname = request.getRequestURI().replaceAll("/edit/", "");
@@ -846,7 +867,7 @@ if (JType) {
                 txt = "";
             }
             file = new TypeFile(path);
-            rf = new TypeRandomAccessFile(file, "rw");
+            var rf = new TypeRandomAccessFile(file, "rw");
             try {
                 if (append) {
                     rf.seek(rf.length());

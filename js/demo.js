@@ -25,11 +25,9 @@ hijk.api.get = function(map, request, response) {
 // web scoket , open two browsers
 var ws_hellonameusers = JType.map();
 hijk.api.ws_helloname = function(socket, request, response) {
-    socket.onclose(
-            function() {
-                ws_hellonameusers.remove(socket.uid);
-            }
-    );
+    socket.onclose(function() {
+        ws_hellonameusers.remove(socket.uid);
+    });
     ws_hellonameusers.put(socket.uid, socket);
 
     socket.name = "";
@@ -37,7 +35,7 @@ hijk.api.ws_helloname = function(socket, request, response) {
         //notice all online users 
         for (var id in ws_hellonameusers) {
             if (ws_hellonameusers[id] !== socket) {
-                ws_hellonameusers[id].send(msg + " From " + socket.name + "." + socket.remoteid);
+                ws_hellonameusers[id].send(msg + " From " + socket.name + socket.remoteid);
             }
         }
     }
@@ -47,15 +45,18 @@ hijk.api.ws_helloname = function(socket, request, response) {
                 socket.name = name;
                 sendall("Welcome " + name);
                 socket.send("Hello " + name + " message:")
-                        .onmessage(function(msg) {
-                            if (msg === "close") {
-                                socket.close();
-                            } else {
-                                sendall("Message: " + msg);
-                            }
-                        });
+                //return new onmessage handler
+                return function(msg) {
+                    if (msg === "close") {
+                        socket.close();
+                    } else {
+                        sendall("Message: " + msg);
+                    }
+                }
             });
+
 };
+
 
 // api bridge
 hijk.api.helloworld_bridge = function() {
@@ -66,38 +67,6 @@ hijk.api.get_bridge = function() {
     var msg = JType.http.post("http://localhost:8080/api/get", {name: 'Andy', id: 100});
     return "Bridge:" + msg;
 };
-
-
-hijk.api.ws_helloname_bridge = function(socket) {
-    var ls = JType.socket("ws://localhost:8080/api/ws_helloname");
-    ls.onclose(function() {
-        socket.close();
-    });
-    socket.onclose(function() {
-        ls.close();
-    });
-
-    ls.onmessage(function(msg) {
-        socket.send("bs_" + msg);
-    }
-    );
-
-    socket.onmessage(function(msg) {
-        ls.send("bc_" + msg);
-    }
-    );
-};
-
-//distributed program , use this server to calculate results
-hijk.api.eval = function(map, request) {
-    if (request.getRemoteAddr() !== "") {
-        var script = map.script[0];
-        return eval("(" + script + ")();");
-    } else {
-        return "";
-    }
-};
-
 
 //table will automatically created
 hijk.table.table1 = {
@@ -347,4 +316,72 @@ hijk.api.table2_selectkey = function(map) {
         sn = JType.int(map.sn[0]);
         return hijk.db.selectKey("table2", [typeid, sn]);
     }
+};
+
+
+//Distributed Programming 
+hijk.api.ws_eval = function(socket, request) {
+    var global = {};
+    socket.onmessage(function(script) {
+        var fun = eval("(" + script + ")");
+        return fun(socket);
+    });
+};
+
+hijk.api.processes = function()
+{
+    // two consoles
+    // jjs build.js -- 8080 0
+    // jjs build.js -- 9090 0
+    // run8080
+    // run9090
+    if (hijk.server.port !== 8080) {
+        return "use http://localhost:8080/api/processes";
+    }
+
+    function start_remote_process(ws_eval_address, main_function_onremote) {
+        var node = JType.socket(ws_eval_address);
+        var fun_code = main_function_onremote.toString();
+        node.send(fun_code);
+        return node;
+    }
+
+    var remote_process = start_remote_process("ws://localhost:9090/api/ws_eval",
+            function(socket) {
+                print("");
+                print("hi, i'm here, this function runs on 9090 not 8080");
+                return function(msg) {
+                    var obj = JSON.parse(msg);
+                    switch (obj.action) {
+                        case "ping":
+                            print("i'm sending pong " + obj.msg);
+                            socket.send("pong " + obj.msg);
+                            break;
+                        case "script":
+                            eval("(" + obj.msg + ")();");
+                            break;
+                        case "running":
+                            socket.send('YES');
+                            break
+                    }
+                }
+            }
+    );
+
+    print("");
+    remote_process.send(JSON.stringify({action: 'ping', msg: 'hello'}));
+
+    remote_process.send(JSON.stringify({action: 'script',
+        msg: function() {
+            print("show time and send back");
+            print(new Date());
+            socket.send((new Date()).toString());
+        }.toString()}));
+
+    remote_process.send(JSON.stringify({action: 'running'}))
+            .onmessage(function(msg) {
+                print(msg);
+            });
+
+    return "check consoles";
 };
