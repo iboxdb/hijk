@@ -23,7 +23,7 @@ print("-----------------------");
 var hijk = {
     debug: true,
     title: "html iboxdb javascript kits",
-    version: "0.2.2",
+    version: "0.2.3",
     server: {
         port: arguments[0],
         sslport: arguments[1],
@@ -789,10 +789,34 @@ if (JType) {
         return server;
     };
 
+    var dbprint = function(ql, args) {
+        var count = 0;
+        var dt = java.lang.System.currentTimeMillis();
+        hijk.db.select(ql, args, function(v) {
+            count++;
+            print(JType.JSONLocal(v));
+        });
+        dt = (java.lang.System.currentTimeMillis() - dt) / 1000.0;
+        print("Count: " + count + ",  Time: " + dt);
+    };
     var run_script = function() {
         var count = 0;
         var script = "";
-        print("jjs: (exit())");
+
+        var tables = ["TableNames:"];
+        hijk.db.cube(function(tran) {
+            var schemas = tran.box.GetSchemas();
+            for (var name in schemas) {
+                tables.push(name);
+            }
+        }
+        );
+        print("");
+        print(tables.join(' '));
+        print("dbprint( 'from table1' )");
+        print("dbprint( 'from table1 where id < ? order by id limit 0 , 20' , [ 100 ] )");
+        print("exit()");
+        print(":");
         while (true) {
             var c = String.fromCharCode(java.lang.System.in.read());
             script += c;
@@ -811,7 +835,7 @@ if (JType) {
                     } catch (e) {
                         print(e.message + " ");
                     }
-                    print("jjs:");
+                    print(":");
                 }
             }
         }
