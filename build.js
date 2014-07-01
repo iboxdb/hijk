@@ -23,7 +23,7 @@ print("-----------------------");
 var hijk = {
     debug: true,
     title: "html iboxdb javascript kits",
-    version: "0.2.3",
+    version: "0.2.3.1",
     server: {
         port: arguments[0],
         sslport: arguments[1],
@@ -789,15 +789,17 @@ if (JType) {
         return server;
     };
 
-    var dbprint = function(ql, args) {
-        var count = 0;
+    var dbprint = function(ql, args) {        
+        var vs = [];
         var dt = java.lang.System.currentTimeMillis();
         hijk.db.select(ql, args, function(v) {
-            count++;
-            print(JType.JSONLocal(v));
+            vs.push(JType.JSONLocal(v));
         });
         dt = (java.lang.System.currentTimeMillis() - dt) / 1000.0;
-        print("Count: " + count + ",  Time: " + dt);
+        for (var i = 0; i < vs.length; i++) {
+            print(vs[i]);
+        }
+        print("Count: " + vs.length + ",  Time: " + dt);
     };
     var run_script = function() {
         var count = 0;
