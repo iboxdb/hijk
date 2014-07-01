@@ -35,10 +35,13 @@ hijk.api.ws_helloname = function(socket, request, response) {
         //notice all online users 
         for (var id in ws_hellonameusers) {
             if (ws_hellonameusers[id] !== socket) {
-                ws_hellonameusers[id].send(msg + " From " + socket.name + socket.remoteid);
+                var y = ws_hellonameusers[id];
+                if (y) {
+                    y.send(msg + " From " + socket.name + socket.remoteid);
+                }
             }
         }
-    }
+    };
 
     socket.send("Name: ")
             .onmessage(function(name) {
