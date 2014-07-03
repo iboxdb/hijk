@@ -23,7 +23,7 @@ print("-----------------------");
 var hijk = {
     debug: true,
     title: "html iboxdb javascript kits",
-    version: "0.2.3.1",
+    version: "0.2.3.2",
     server: {
         port: arguments[0],
         sslport: arguments[1],
@@ -181,9 +181,14 @@ try {
 
                 return socket;
             };
-        })()
-
-
+        })(),
+        localhost: function() {
+            try {
+                return java.net.InetAddress.getLocalHost().toString();
+            } catch (e) {
+                return e.message;
+            }
+        }
     };
     JType.Extend(JType, {
         TypeBoxSystem: Java.type("iBoxDB.LocalServer.BoxSystem"),
@@ -485,6 +490,10 @@ if (JType) {
                 var TypeDB = Java.type("iBoxDB.LocalServer.DB");
                 TypeDB.root("iboxdb/");
                 var db = new TypeDB(hijk.dbaddress);
+                //Max Cache
+                //var config = db.getConfig().Config;
+                //var ccfield = config.getClass().getField('CachePageCount');
+                //ccfield.set(config, java.lang.Integer.MAX_VALUE);
                 for (var t in hijk.table) {
                     var tableName = t;
                     var data = hijk.table[tableName].data;
@@ -789,7 +798,7 @@ if (JType) {
         return server;
     };
 
-    var dbprint = function(ql, args) {        
+    var dbprint = function(ql, args) {
         var vs = [];
         var dt = java.lang.System.currentTimeMillis();
         hijk.db.select(ql, args, function(v) {
@@ -941,5 +950,6 @@ if (JType) {
         load_system();
     }
     hijk.server.server = http_server_jetty();
+    //print( JType.localhost() );
     run_script();
 }
