@@ -805,10 +805,14 @@ if (JType) {
         function dbprint(ql, args) {
             JType.Thread(function() {
                 var vs = [];
+                var c = 0;
                 var dt = java.lang.System.currentTimeMillis();
                 hijk.db.cube(function(box) {
                     box.select(ql, args, function(v) {
                         vs.push(JType.JSONLocal(v));
+                        if (((++c) % 10000) === 9999) {
+                            print("loading " + c);
+                        }
                     });
                 });
                 dt = (java.lang.System.currentTimeMillis() - dt) / 1000.0;
