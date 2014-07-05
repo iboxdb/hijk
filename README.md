@@ -142,3 +142,13 @@ hijk.api.table1_select_sum = function() {
 };
 ```
 
+####Benchmark, Select Record from Database
+
+```
+Document Path:          /api/table1_selectkey?id=187663
+Concurrency Level:      500
+Complete requests:      100000
+Failed requests:        0
+Write errors:           0
+Requests per second:    4829.27 [#/sec] (mean)
+```
