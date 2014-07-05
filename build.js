@@ -23,7 +23,7 @@ print("-----------------------");
 var hijk = {
     debug: true,
     title: "html iboxdb javascript kits",
-    version: "0.2.3.2",
+    version: "0.2.3.3",
     server: {
         port: arguments[0],
         sslport: arguments[1],
@@ -230,6 +230,10 @@ try {
             }
             this.TypeBoxSystem.Lock(fun, o);
         },
+        Thread: function(fun) {
+            var t = new java.lang.Thread(fun);
+            t.start();
+        },
         AppTag: function(obj, value) {
             if (obj instanceof this.TypeLocal) {
                 if (value) {
@@ -290,6 +294,7 @@ try {
                 }
             }
         },
+        _Connection_count: new java.util.concurrent.atomic.AtomicInteger(),
         _JSocket_sessions: null,
         JSocket: function() {
             this.uid = JType.NewAppID();
@@ -354,7 +359,8 @@ try {
                         msg = this.msgbuffer.poll();
                     }
                 }
-            };
+            }
+            ;
         }
     });
 } catch (e) {
@@ -572,7 +578,6 @@ if (JType) {
 
         JType.Lock(load_system_inner);
     };
-
     hijk.server.last_load = 0;
     var debug_load_system = (function() {
         var fileCache = {};
@@ -599,7 +604,6 @@ if (JType) {
             }
         };
     })();
-
     var api_process = function(request, response) {
         debug_load_system();
         if (hijk.exception) {
@@ -620,10 +624,7 @@ if (JType) {
             }
         }
     };
-
-
     JType.WebSocketListener = Java.type("org.eclipse.jetty.websocket.api.WebSocketListener");
-
     var ws_api_process = function(req, resp) {
 
         var socket = new JType.JSocket();
@@ -670,9 +671,7 @@ if (JType) {
             }
         });
     };
-
     var http_server_jetty = function() {
-
         var Server = Java.type("org.eclipse.jetty.server.Server");
         var ResourceHandler = Java.type("org.eclipse.jetty.server.handler.ResourceHandler");
         var Handler = Java.type("org.eclipse.jetty.server.Handler");
@@ -714,6 +713,7 @@ if (JType) {
         var holderEvents = new ServletHolder(ws);
         servlet.addServlet(holderEvents, "/");
 
+        var conn_count = JType._Connection_count;
         var api = new Handler(
                 {
                     setServer: function(server) {
@@ -735,35 +735,39 @@ if (JType) {
                             request,
                             response
                             ) {
-                        var r = null;
-                        if (request.getRequestURI().startsWith("/edit/")) {
-                            r = DebugEditor(request.getParameterMap(), request, response);
-                            r = JType.JSONLocal(r);
-                        } else if (request.getRequestURI().startsWith("/api/ws_")) {
-                            // WebSocket 
-                            servlet.handle(target, baseRequest,
-                                    request,
-                                    response);
-                        } else if (request.getRequestURI().startsWith("/api/")) {
-                            //Http Https
-                            r = api_process(request, response);
+                        conn_count.incrementAndGet();
+                        try {
+                            var r = null;
+                            if (request.getRequestURI().startsWith("/edit/")) {
+                                r = DebugEditor(request.getParameterMap(), request, response);
+                                r = JType.JSONLocal(r);
+                            } else if (request.getRequestURI().startsWith("/api/ws_")) {
+                                // WebSocket 
+                                servlet.handle(target, baseRequest,
+                                        request,
+                                        response);
+                            } else if (request.getRequestURI().startsWith("/api/")) {
+                                //Http Https
+                                r = api_process(request, response);
+                            }
+                            if (baseRequest.isHandled()) {
+                            } else if (r !== null) {
+                                baseRequest.setHandled(true);
+                                response.setContentType("text/html;charset=utf-8");
+                                response.setStatus(200);
+                                response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+                                response.setHeader("Pragma", "no-cache");
+                                response.setDateHeader("Expires", 0);
+                                response.getWriter().println(r);
+                            } else {
+                                html.handle(target, baseRequest,
+                                        request,
+                                        response);
+                            }
+                        } finally {
+                            conn_count.decrementAndGet();
                         }
-                        if (baseRequest.isHandled()) {
-                        } else if (r !== null) {
-                            baseRequest.setHandled(true);
-                            response.setContentType("text/html;charset=utf-8");
-                            response.setStatus(200);
-                            response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-                            response.setHeader("Pragma", "no-cache");
-                            response.setDateHeader("Expires", 0);
-                            response.getWriter().println(r);
-                        } else {
-                            html.handle(target, baseRequest,
-                                    request,
-                                    response);
-                        }
-                    }
-                }
+                    }}
         );
         var threadPool = new QueuedThreadPool(hijk.server.threadCount);
         var server = new Server(threadPool);
@@ -797,20 +801,28 @@ if (JType) {
         }
         return server;
     };
-
-    var dbprint = function(ql, args) {
-        var vs = [];
-        var dt = java.lang.System.currentTimeMillis();
-        hijk.db.select(ql, args, function(v) {
-            vs.push(JType.JSONLocal(v));
-        });
-        dt = (java.lang.System.currentTimeMillis() - dt) / 1000.0;
-        for (var i = 0; i < vs.length; i++) {
-            print(vs[i]);
-        }
-        print("Count: " + vs.length + ",  Time: " + dt);
-    };
     var run_script = function() {
+        function dbprint(ql, args) {
+            JType.Thread(function() {
+                var vs = [];
+                var dt = java.lang.System.currentTimeMillis();
+                hijk.db.cube(function(box) {
+                    box.select(ql, args, function(v) {
+                        vs.push(JType.JSONLocal(v));
+                    });
+                });
+                dt = (java.lang.System.currentTimeMillis() - dt) / 1000.0;
+
+                for (var i = 0; i < vs.length; i++) {
+                    print(vs[i]);
+                }
+                print("Count: " + vs.length + ",  Time: " + dt);
+            });
+        }
+        function online() {
+            print(JType._Connection_count.get() + JType._JSocket_sessions.size());
+        }
+
         var count = 0;
         var script = "";
 
@@ -826,7 +838,7 @@ if (JType) {
         print(tables.join(' '));
         print("dbprint( 'from table1' )");
         print("dbprint( 'from table1 where id < ? order by id limit 0 , 20' , [ 100 ] )");
-        print("exit()");
+        print("online() exit()");
         print(":");
         while (true) {
             var c = String.fromCharCode(java.lang.System.in.read());
@@ -950,6 +962,5 @@ if (JType) {
         load_system();
     }
     hijk.server.server = http_server_jetty();
-    //print( JType.localhost() );
     run_script();
 }
