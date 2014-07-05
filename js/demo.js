@@ -324,11 +324,10 @@ hijk.api.table2_selectkey = function(map) {
 
 //Distributed Programming 
 hijk.api.ws_eval = function(socket, request) {
-    var global = {};
     socket.onmessage(function(script) {
         var fun = eval("(" + script + ")");
-        return fun(socket);
-    });
+        return fun();
+    }, socket);//using argument to pass socket for remote function
 };
 
 hijk.api.processes = function()
@@ -350,10 +349,10 @@ hijk.api.processes = function()
     }
 
     var remote_process = start_remote_process("ws://localhost:9090/api/ws_eval",
-            function(socket) {
+            function() {
                 print("");
                 print("hi, i'm here, this function runs on 9090 not 8080");
-                return function(msg) {
+                return function(msg, socket) {
                     var obj = JSON.parse(msg);
                     switch (obj.action) {
                         case "ping":

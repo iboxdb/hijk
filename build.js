@@ -23,43 +23,39 @@ print("-----------------------");
 var hijk = {
     debug: true,
     title: "html iboxdb javascript kits",
-    version: "0.2.3.3",
+    version: "0.2.4",
     server: {
-        port: arguments[0],
-        sslport: arguments[1],
+        port: 8080,
+        sslport: 8081,
         keystore: 'keystore.jks',
         keypassword: 'localhost',
         threadCount: 512,
         server: null
     },
+    dbaddress: 1,
+    dbCachePageCount: -1,
     exception: null,
     dbexception: null,
-    dbaddress: 1,
     db: null,
     api: {},
     table: {}
 };
 
-if (hijk.server.sslport === undefined && hijk.server.port === undefined) {
-    hijk.server.port = 8080;
-    hijk.server.sslport = 8081;
+if (arguments[0]) {
+    hijk.server.port = parseInt(arguments[0]);
+    if (arguments[1]) {
+        hijk.server.sslport = parseInt(arguments[1]);
+    } else {
+        hijk.server.sslport = 0;
+    }
 }
-if (hijk.server.port === undefined) {
-    hijk.server.port = 0;
-}
-if (hijk.server.sslport === undefined) {
-    hijk.server.sslport = 0;
-}
-hijk.server.port = parseInt(hijk.server.port);
-hijk.server.sslport = parseInt(hijk.server.sslport);
-if (hijk.server.port === hijk.server.sslport) {
-    hijk.server.sslport = 0;
-}
+
 
 hijk.dbaddress = hijk.server.port !== 0 ? hijk.server.port : hijk.server.sslport;
 if (hijk.dbaddress === 0) {
     hijk.dbaddress = 1;
 }
+
 
 java.lang.Thread.currentThread().setContextClassLoader(
         new java.lang.ClassLoader({
@@ -149,18 +145,23 @@ try {
             };
         },
         socket: (function() {
-            // unstable version WebSocketClient
+
             var WebSocketClient = Java.type("org.eclipse.jetty.websocket.client.WebSocketClient");
             var WebSocketListener = Java.type("org.eclipse.jetty.websocket.api.WebSocketListener");
+            var SslContextFactory = Java.type("org.eclipse.jetty.util.ssl.SslContextFactory");
             var URI = Java.type("java.net.URI");
+            var ClientUpgradeRequest = Java.type("org.eclipse.jetty.websocket.client.ClientUpgradeRequest");
 
-            var client = new WebSocketClient();
+            var sslContextFactory = new SslContextFactory(true);
+            var client = new WebSocketClient(sslContextFactory);
             client.setMaxIdleTimeout(java.lang.Long.MAX_VALUE / 2);
             client.start();
 
             return function(uri) {
 
                 var socket = new JType.JSocket();
+                var request = new ClientUpgradeRequest();
+
                 client.connect(
                         new WebSocketListener({
                             onWebSocketBinary: function(bytes, i, i1) {
@@ -177,7 +178,7 @@ try {
                                 socket._callconnect(sess);
                             }
                         })
-                        , new URI(uri)).get();
+                        , new URI(uri), request).get();
 
                 return socket;
             };
@@ -198,7 +199,7 @@ try {
         NewAppID: (function() {
             var al = new java.util.concurrent.atomic.AtomicLong();
             return function() {
-                return al.getAndIncrement();
+                return al.incrementAndGet();
             }
         })(),
         Date: function(d) {
@@ -302,9 +303,11 @@ try {
             this._onmessage = null;
             this.remoteid = "";
             this.msgbuffer = JType.queue();
+            this._msg_state = null;
 
-            this.onmessage = function(fun) {
+            this.onmessage = function(fun, state) {
                 this._onmessage = fun;
+                this._msg_state = state;
                 this._flushmsg();
                 return this;
             };
@@ -318,7 +321,7 @@ try {
                     this.session.getRemote().sendStringByFuture(msg);
                     return this;
                 } catch (e) {
-                    print(__LINE__, e.message);
+                    print(__LINE__, this.uid, toExceptionString(e));
                     return e;
                 }
             };
@@ -352,7 +355,7 @@ try {
                 if (this._onmessage) {
                     var msg = this.msgbuffer.poll();
                     while (msg) {
-                        var newonmessage = this._onmessage(msg);
+                        var newonmessage = this._onmessage(msg, this._msg_state);
                         if (newonmessage) {
                             this._onmessage = newonmessage;
                         }
@@ -496,10 +499,14 @@ if (JType) {
                 var TypeDB = Java.type("iBoxDB.LocalServer.DB");
                 TypeDB.root("iboxdb/");
                 var db = new TypeDB(hijk.dbaddress);
-                //Max Cache
-                //var config = db.getConfig().Config;
-                //var ccfield = config.getClass().getField('CachePageCount');
-                //ccfield.set(config, java.lang.Integer.MAX_VALUE);
+
+                if (hijk.dbCachePageCount > 0) {
+                    var config = db.getConfig().Config;
+                    var ccfield = config.getClass().getField('CachePageCount');
+                    ccfield.set(config, JType.int(hijk.dbCachePageCount));
+                    //Max Cache
+                    //ccfield.set(config, java.lang.Integer.MAX_VALUE);
+                }
                 for (var t in hijk.table) {
                     var tableName = t;
                     var data = hijk.table[tableName].data;
@@ -802,6 +809,9 @@ if (JType) {
         return server;
     };
     var run_script = function() {
+        var count = 0;
+        var script = "";
+
         function dbprint(ql, args) {
             JType.Thread(function() {
                 var vs = [];
@@ -818,6 +828,11 @@ if (JType) {
                 dt = (java.lang.System.currentTimeMillis() - dt) / 1000.0;
 
                 for (var i = 0; i < vs.length; i++) {
+                    if (script.length > 3) {
+                        script = "";
+                        count = 0;
+                        break;
+                    }
                     print(vs[i]);
                 }
                 print("Count: " + vs.length + ",  Time: " + dt);
@@ -827,8 +842,6 @@ if (JType) {
             print(JType._Connection_count.get() + JType._JSocket_sessions.size());
         }
 
-        var count = 0;
-        var script = "";
 
         var tables = ["TableNames:"];
         hijk.db.cube(function(tran) {
@@ -842,7 +855,7 @@ if (JType) {
         print(tables.join(' '));
         print("dbprint( 'from table1' )");
         print("dbprint( 'from table1 where id < ? order by id limit 0 , 20' , [ 100 ] )");
-        print("online() exit()");
+        print("online(); exit()");
         print(":");
         while (true) {
             var c = String.fromCharCode(java.lang.System.in.read());
@@ -853,8 +866,8 @@ if (JType) {
             if (c === ')') {
                 count--;
                 if (count <= 0) {
-                    var s = "(function(){" +
-                            script + "})()";
+                    var s = "(function(){ " +
+                            script + " })()";
                     script = "";
                     count = 0;
                     try {
