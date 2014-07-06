@@ -144,7 +144,56 @@ hijk.api.table1_select_sum = function() {
 
 ####More Usages
 ######JavaScript Multi-Thread
+
+```
+hijk.api.multi_thread = function() {
+    var results = JType.bqueue(2);
+
+    //Thread 1
+    JType.thread(function() {
+        for (var i = 1; i <= 100000; i++) {
+        }
+        results.put("T01-" + c);
+    });
+
+    //Thread 2
+    JType.thread(function() {
+        for (var i = 100001; i <= 200000; i++) {
+        }
+        results.put("T02-" + c);
+    });
+
+    var rs = [];
+    var bg = Date.now();
+    rs.push(results.take());
+    rs.push(results.take());
+    rs.push(Date.now() - bg);
+    return rs;
+};
+```
+
 ######JavaScript Distributed Programming
+
+```
+hijk.api.processes = function()
+{
+    var remote_process = start_remote_process("ws://remotehost:9090/api/ws_eval",
+            function() {
+                print("this function runs on remote server");
+                return function(msg, socket) {
+                    var obj = JSON.parse(msg);
+                    switch (obj.action) {
+                      case "ping":
+                            print("i'm sending pong " + obj.msg);
+                            socket.send("pong " + obj.msg);
+                            break;
+                    }
+                }
+            });
+            
+    remote_process.send({action: 'ping', msg: 'hello'});        
+}            
+```
 
 ####Benchmark, Select Record from Database
 
