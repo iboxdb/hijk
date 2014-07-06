@@ -21,7 +21,7 @@ print("-----------------------");
 var hijk = {
     debug: true,
     title: "html iboxdb javascript kits",
-    version: "0.3",
+    version: "0.3.0.1",
     server: {
         port: 8080,
         sslport: 8081,
@@ -151,6 +151,17 @@ try {
         },
         uuid: function() {
             return java.util.UUID.randomUUID().toString();
+        },
+        proxy: function(value) {
+            return {
+                get: function() {
+                    return value;
+                },
+                set: function(v) {
+                    value = v;
+                    return v;
+                }
+            };
         },
         http: new function() {
             var HttpClient = Java.type("org.eclipse.jetty.client.HttpClient");
@@ -897,7 +908,7 @@ if (JType) {
     ;
     var run_script = function() {
         var count = 0;
-        var script = "";
+        var script = JType.proxy("");
         function dbprint(ql, args) {
             JType.thread(function() {
                 var vs = [];
@@ -913,8 +924,8 @@ if (JType) {
                 });
                 dt = (java.lang.System.currentTimeMillis() - dt) / 1000.0;
                 for (var i = 0; i < vs.length; i++) {
-                    if (script.length > 3) {
-                        script = "";
+                    if (script.get().length > 3) {
+                        script.set("");
                         count = 0;
                         break;
                     }
@@ -951,7 +962,7 @@ if (JType) {
         print(":");
         while (true) {
             var c = String.fromCharCode(java.lang.System.in.read());
-            script += c;
+            script.set(script.get() + c);
             if (c === '(') {
                 count++;
             }
@@ -959,8 +970,8 @@ if (JType) {
                 count--;
                 if (count <= 0) {
                     var s = "(function(){ " +
-                            script + " })()";
-                    script = "";
+                            script.get() + " })()";
+                    script.set("");
                     count = 0;
                     try {
                         eval(s);

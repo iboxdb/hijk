@@ -328,7 +328,7 @@ hijk.api.multi_thread = function() {
     //Thread 1
     JType.thread(function() {
         var c = 1;
-        for (var i = 1; i <= 100000; i++) {
+        for (var i = 1; i <= 10000; i++) {
             c += i;
             JType.sleep(0);
         }
@@ -338,7 +338,7 @@ hijk.api.multi_thread = function() {
     //Thread 2
     JType.thread(function() {
         var c = 1;
-        for (var i = 100001; i <= 200000; i++) {
+        for (var i = 10001; i <= 20000; i++) {
             c += i;
             JType.sleep(0);
         }
