@@ -142,6 +142,10 @@ hijk.api.table1_select_sum = function() {
 };
 ```
 
+####More Usages
+######JavaScript Multi-Thread
+######JavaScript Distributed Programming
+
 ####Benchmark, Select Record from Database
 
 ```
@@ -152,3 +156,5 @@ Failed requests:        0
 Write errors:           0
 Requests per second:    4829.27 [#/sec] (mean)
 ```
+
+
