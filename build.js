@@ -21,7 +21,7 @@ print("-----------------------");
 var hijk = {
     debug: true,
     title: "html iboxdb javascript kits",
-    version: "0.3 b",
+    version: "0.3",
     server: {
         port: 8080,
         sslport: 8081,
@@ -30,8 +30,12 @@ var hijk = {
         threadCount: 512,
         server: null
     },
-    dbaddress: 1,
+    //Max Cache  java.lang.Integer.MAX_VALUE
     dbCachePageCount: -1,
+    //Thread Count
+    dbReadStreamCount: -1,
+    //file path
+    dbaddress: 1,
     exception: null,
     dbexception: null,
     db: null,
@@ -514,13 +518,18 @@ if (JType) {
                 var TypeDB = Java.type("iBoxDB.LocalServer.DB");
                 TypeDB.root("iboxdb/");
                 var db = new TypeDB(hijk.dbaddress);
+
+                var config = db.getConfig().Config;
                 if (hijk.dbCachePageCount > 0) {
-                    var config = db.getConfig().Config;
                     var ccfield = config.getClass().getField('CachePageCount');
                     ccfield.set(config, JType.int(hijk.dbCachePageCount));
-                    //Max Cache
-                    //ccfield.set(config, java.lang.Integer.MAX_VALUE);
                 }
+
+                if (hijk.dbReadStreamCount > 0) {
+                    var ccfield = config.getClass().getField('ReadStreamCount');
+                    ccfield.set(config, java.lang.Byte.valueOf(hijk.dbReadStreamCount));
+                }
+
                 for (var tableName in hijk.table) {
                     var data = hijk.table[tableName].data;
                     var key = hijk.table[tableName].key;
@@ -915,7 +924,14 @@ if (JType) {
             });
         }
         function online() {
-            print(JType._Connection_count.get() + JType._JSocket_sessions.size());
+            print("Connections:", JType._Connection_count.get() + JType._JSocket_sessions.size());
+            var rt = java.lang.Runtime.getRuntime();
+            print("maxMemory:  ", rt.maxMemory(), "run.bat/sh -> jjs -J-Xmx4g -cp ... build.js");
+            print("totalMemory:", rt.totalMemory());
+            print("freeMemory: ", rt.freeMemory());
+            print(java.lang.System.getProperty('os.name'),
+                    java.lang.System.getProperty('java.vm.name'),
+                    java.lang.System.getProperty('java.runtime.version'));
         }
 
 
