@@ -321,6 +321,38 @@ hijk.api.table2_selectkey = function(map) {
     }
 };
 
+//Multi-Thread
+hijk.api.multi_thread = function() {
+    var results = JType.bqueue(2);
+
+    //Thread 1
+    JType.thread(function() {
+        var c = 1;
+        for (var i = 1; i <= 100000; i++) {
+            c += i;
+            JType.sleep(0);
+        }
+        results.put("T01-" + c);
+    });
+
+    //Thread 2
+    JType.thread(function() {
+        var c = 1;
+        for (var i = 100001; i <= 200000; i++) {
+            c += i;
+            JType.sleep(0);
+        }
+        results.put("T02-" + c);
+    });
+
+    var rs = [];
+    var bg = Date.now();
+    rs.push(results.take());
+    rs.push(results.take());
+    rs.push(Date.now() - bg);
+
+    return rs;
+};
 
 //Distributed Programming 
 hijk.api.ws_eval = function(socket, request) {
@@ -329,6 +361,13 @@ hijk.api.ws_eval = function(socket, request) {
         return fun();
     }, socket);//using argument to pass socket for remote function
 };
+
+function start_remote_process(ws_eval_address, main_function_onremote) {
+    var node = JType.socket(ws_eval_address);
+    var fun_code = main_function_onremote.toString();
+    node.send(fun_code);
+    return node;
+}
 
 hijk.api.processes = function()
 {
@@ -339,13 +378,6 @@ hijk.api.processes = function()
     // run9090
     if (hijk.server.port !== 8080) {
         return "use http://localhost:8080/api/processes";
-    }
-
-    function start_remote_process(ws_eval_address, main_function_onremote) {
-        var node = JType.socket(ws_eval_address);
-        var fun_code = main_function_onremote.toString();
-        node.send(fun_code);
-        return node;
     }
 
     var remote_process = start_remote_process("ws://localhost:9090/api/ws_eval",
@@ -363,27 +395,34 @@ hijk.api.processes = function()
                             eval("(" + obj.msg + ")();");
                             break;
                         case "running":
-                            socket.send('YES');
-                            break
+                            socket.send("i'm running");
+                            break;
+                        case "close":
+                            socket.close();
+                            print('closed');
+                            break;
                     }
-                }
+                };
             }
     );
 
     print("");
-    remote_process.send(JSON.stringify({action: 'ping', msg: 'hello'}));
+    remote_process.send({action: 'ping', msg: 'hello'});
 
-    remote_process.send(JSON.stringify({action: 'script',
+    remote_process.send({action: 'script',
         msg: function() {
             print("show time and send back");
-            print(new Date());
-            socket.send((new Date()).toString());
-        }.toString()}));
+            var dt = new Date();
+            print(JSON.stringify(dt));
+            socket.send(dt);
+        }.toString()});
 
-    remote_process.send(JSON.stringify({action: 'running'}))
+    remote_process.send({action: 'running'})
             .onmessage(function(msg) {
                 print(msg);
             });
+
+    remote_process.send({action: 'close'});
 
     return "check consoles";
 };

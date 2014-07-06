@@ -12,18 +12,16 @@
 
 
 "use strict";
-
 print("Javascript WebAPI Development Package");
 print("-----------------------");
 print("HTTP Engine    : jetty http://www.eclipse.org/jetty/");
 print("Database Engine: iBoxDB http://www.iboxdb.com");
 print("Script Engine  : Nashorn JDK8");
 print("-----------------------");
-
 var hijk = {
     debug: true,
     title: "html iboxdb javascript kits",
-    version: "0.2.4",
+    version: "0.3 b",
     server: {
         port: 8080,
         sslport: 8081,
@@ -40,7 +38,6 @@ var hijk = {
     api: {},
     table: {}
 };
-
 if (arguments[0]) {
     hijk.server.port = parseInt(arguments[0]);
     if (arguments[1]) {
@@ -64,7 +61,6 @@ java.lang.Thread.currentThread().setContextClassLoader(
             }
         }
         ));
-
 function build_run() {
     var dirs = ["html", "iboxdb", "js", "kits"];
     for (var i = 0; i < dirs.l; i++) {
@@ -123,7 +119,34 @@ try {
             return new java.util.concurrent.ConcurrentHashMap();
         },
         queue: function() {
+            //q.add(v); v=q.poll(); 
             return new java.util.concurrent.ConcurrentLinkedQueue();
+        },
+        bqueue: function(max) {
+            //q.put(v); v=q.take()
+            return new java.util.concurrent.ArrayBlockingQueue(max);
+        },
+        lock: (function() {
+            var TypeBoxSystem = Java.type("iBoxDB.LocalServer.BoxSystem");
+            return function(fun, o) {
+                if (!o) {
+                    o = null;
+                }
+                TypeBoxSystem.Lock(fun, o);
+            };
+        })(),
+        thread: (function() {
+            var pool = java.util
+                    .concurrent.Executors.newFixedThreadPool(32);
+            return function(fun) {
+                pool.execute(fun);
+            };
+        })(),
+        sleep: function(millis) {
+            java.lang.Thread.sleep(millis);
+        },
+        uuid: function() {
+            return java.util.UUID.randomUUID().toString();
         },
         http: new function() {
             var HttpClient = Java.type("org.eclipse.jetty.client.HttpClient");
@@ -145,23 +168,18 @@ try {
             };
         },
         socket: (function() {
-
             var WebSocketClient = Java.type("org.eclipse.jetty.websocket.client.WebSocketClient");
             var WebSocketListener = Java.type("org.eclipse.jetty.websocket.api.WebSocketListener");
             var SslContextFactory = Java.type("org.eclipse.jetty.util.ssl.SslContextFactory");
             var URI = Java.type("java.net.URI");
             var ClientUpgradeRequest = Java.type("org.eclipse.jetty.websocket.client.ClientUpgradeRequest");
-
             var sslContextFactory = new SslContextFactory(true);
             var client = new WebSocketClient(sslContextFactory);
             client.setMaxIdleTimeout(java.lang.Long.MAX_VALUE / 2);
             client.start();
-
             return function(uri) {
-
                 var socket = new JType.JSocket();
                 var request = new ClientUpgradeRequest();
-
                 client.connect(
                         new WebSocketListener({
                             onWebSocketBinary: function(bytes, i, i1) {
@@ -179,20 +197,28 @@ try {
                             }
                         })
                         , new URI(uri), request).get();
-
                 return socket;
             };
         })(),
         localhost: function() {
             try {
-                return java.net.InetAddress.getLocalHost().toString();
+                var addrs = [];
+                var faces = java.net.NetworkInterface.getNetworkInterfaces();
+                while (faces.hasMoreElements()) {
+                    var as = faces.nextElement().getInetAddresses();
+                    while (as.hasMoreElements()) {
+                        var e = as.nextElement();
+                        //e.getHostName() + "/" +
+                        addrs.push(e.getHostAddress());
+                    }
+                }
+                return addrs.join("; ");
             } catch (e) {
                 return e.message;
             }
         }
     };
     JType.Extend(JType, {
-        TypeBoxSystem: Java.type("iBoxDB.LocalServer.BoxSystem"),
         TypeLocal: Java.type("iBoxDB.LocalServer.Local"),
         Random: new java.util.Random(),
         UTF8: java.nio.charset.Charset.forName("UTF-8"),
@@ -224,16 +250,6 @@ try {
                 array[i] = this.Map(array[i]);
             }
             return array;
-        },
-        Lock: function(fun, o) {
-            if (!o) {
-                o = null;
-            }
-            this.TypeBoxSystem.Lock(fun, o);
-        },
-        Thread: function(fun) {
-            var t = new java.lang.Thread(fun);
-            t.start();
         },
         AppTag: function(obj, value) {
             if (obj instanceof this.TypeLocal) {
@@ -304,7 +320,6 @@ try {
             this.remoteid = "";
             this.msgbuffer = JType.queue();
             this._msg_state = null;
-
             this.onmessage = function(fun, state) {
                 this._onmessage = fun;
                 this._msg_state = state;
@@ -318,7 +333,8 @@ try {
             };
             this.send = function(msg) {
                 try {
-                    this.session.getRemote().sendStringByFuture(msg);
+                    this.session.getRemote()
+                            .sendStringByFuture(JType.JSONLocal(msg));
                     return this;
                 } catch (e) {
                     print(__LINE__, this.uid, toExceptionString(e));
@@ -349,7 +365,6 @@ try {
                 debug_load_system();
                 this.msgbuffer.add(msg);
                 this._flushmsg();
-
             };
             this._flushmsg = function() {
                 if (this._onmessage) {
@@ -372,7 +387,7 @@ try {
 }
 
 if (JType) {
-    var load_system = function() {
+    var load_system = function(exjs) {
         function load_system_inner() {
 
             function boxwrap(_box) {
@@ -499,7 +514,6 @@ if (JType) {
                 var TypeDB = Java.type("iBoxDB.LocalServer.DB");
                 TypeDB.root("iboxdb/");
                 var db = new TypeDB(hijk.dbaddress);
-
                 if (hijk.dbCachePageCount > 0) {
                     var config = db.getConfig().Config;
                     var ccfield = config.getClass().getField('CachePageCount');
@@ -507,11 +521,18 @@ if (JType) {
                     //Max Cache
                     //ccfield.set(config, java.lang.Integer.MAX_VALUE);
                 }
-                for (var t in hijk.table) {
-                    var tableName = t;
+                for (var tableName in hijk.table) {
                     var data = hijk.table[tableName].data;
                     var key = hijk.table[tableName].key;
                     var index = hijk.table[tableName].index;
+                    if (!data) {
+                        print('use default table setting, ' + tableName);
+                        data = {id: 0};
+                        key = ["id"];
+                    }
+                    if (!key) {
+                        key = ["id"];
+                    }
                     try {
                         db.getConfig().ensureTable(tableName, JType.Map(data), key);
                         if (index) {
@@ -543,11 +564,8 @@ if (JType) {
                 hijk.db.close();
             }
             hijk.db = null;
-
             hijk.api = {};
             hijk.table = {};
-
-
             if (JType._JSocket_sessions) {
                 redo: for (var x in JType._JSocket_sessions) {
                     var y = JType._JSocket_sessions[x];
@@ -559,7 +577,6 @@ if (JType) {
                 }
             }
             JType._JSocket_sessions = JType.map();
-
             try {
                 var ff = (new java.io.File("js")).listFiles();
                 var paths = [];
@@ -573,6 +590,13 @@ if (JType) {
                 for (var i = 0; i < paths.length; i++) {
                     load(paths[i]);
                 }
+
+                if (typeof exjs === "string") {
+                    load(exjs);
+                } else if (typeof exjs === "function") {
+                    exjs();
+                }
+
                 hijk.db = load_database();
                 hijk.exception = null;
                 hijk.dbexception = "";
@@ -583,8 +607,9 @@ if (JType) {
             }
         }
 
-        JType.Lock(load_system_inner);
+        JType.lock(load_system_inner);
     };
+    var jsload = load_system;
     hijk.server.last_load = 0;
     var debug_load_system = (function() {
         var fileCache = {};
@@ -635,7 +660,6 @@ if (JType) {
     var ws_api_process = function(req, resp) {
 
         var socket = new JType.JSocket();
-
         return new JType.WebSocketListener({
             onWebSocketBinary: function(bytes, i, i1) {
             },
@@ -649,7 +673,6 @@ if (JType) {
             },
             onWebSocketConnect: function(sess) {
                 socket._callconnect(sess);
-
                 socket.map = req.getHttpServletRequest().getParameterMap();
                 var ks = req.getHttpServletRequest().getRequestURI().toString().split("/");
                 this.callfun(ks[2], socket);
@@ -694,13 +717,13 @@ if (JType) {
         var ServletHolder = Java.type("org.eclipse.jetty.servlet.ServletHolder");
         var WebSocketCreator = Java.type("org.eclipse.jetty.websocket.servlet.WebSocketCreator");
         var WebSocketHandler = Java.type("org.eclipse.jetty.websocket.server.WebSocketHandler");
-
+        var HttpServlet = Java.type("javax.servlet.http.HttpServlet");
+        var File = Java.type("java.io.File");
 
         var html = new ResourceHandler();
         html.setDirectoriesListed(hijk.debug);
         html.setResourceBase("./html");
         html.setWelcomeFiles(["index.html"]);
-
         var ws = new WebSocketServlet({
             configure: function(factory) {
                 factory.getPolicy().setIdleTimeout(java.lang.Long.MAX_VALUE / 2);
@@ -711,14 +734,69 @@ if (JType) {
                             }
                         }));
             }});
+        var parseRequest = (function() {
+            var DiskFileItemFactory = Java.type("org.apache.commons.fileupload.disk.DiskFileItemFactory");
+            var ServletFileUpload = Java.type("org.apache.commons.fileupload.servlet.ServletFileUpload");
+            var ud = new File("html/uploads/");
+            ud.mkdir();
+            var of = new File("html/uploads/temp/");
+            of.mkdir();
+            var lf = of.listFiles();
+            for (var i = 0; i < lf.length; i++) {
+                lf[i].delete();
+            }
 
+            var factory = new DiskFileItemFactory();
+            factory.setSizeThreshold(4096);
+            factory.setRepository(of);
+
+            var upload = new ServletFileUpload(factory);
+            upload.setSizeMax(1024 * 1024 * 1);
+            return function(req) {
+                return upload.parseRequest(req);
+            };
+        })();
+        var upload = new HttpServlet({
+            doPrint: function(outp, msg) {
+                var txt = "<html><body><h3>FileUpload</h3>\n\
+ <form action='/api/ws_upload' method='post' enctype='multipart/form-data'>\n\
+<input type='file' name='userfile1' />\n\
+<input type='submit' value='Submit' /><input type='reset' value='Reset' /></form><div id='msg'>";
+                txt += (msg + "</div></body></html>");
+                outp.print(txt);
+            },
+            doGet: function(req, resp) {
+                var outp = resp.getWriter();
+                this.doPrint(outp, "");
+            },
+            doPost: function(req, resp) {
+                var saves = [];
+                var fileItems = parseRequest(req);
+                var i = fileItems.iterator();
+                while (i.hasNext()) {
+                    var fi = i.next();
+                    var fname = fi.getName();
+                    if (fname.length() < 1) {
+                        continue;
+                    }
+                    fname = fname.substring(fname.lastIndexOf("."));
+                    fname = JType.uuid() + fname;
+                    fi.write(new File("html/uploads/" + fname));
+                    var path = "<a href='http://localhost:8080/uploads/" + fname + "' >online:" + fi.getName() + "</a>";
+                    saves.push(path);
+                }
+                var outp = resp.getWriter();
+                this.doPrint(outp, saves.join(";"));
+            }
+        });
         var servlet = new ServletContextHandler(
                 ServletContextHandler.NO_SESSIONS
                 );
         servlet.setContextPath("/");
 
-        var holderEvents = new ServletHolder(ws);
-        servlet.addServlet(holderEvents, "/");
+        servlet.addServlet(new ServletHolder(upload), "/api/ws_upload");
+        servlet.addServlet(new ServletHolder(ws), "/api/*");
+
 
         var conn_count = JType._Connection_count;
         var api = new Handler(
@@ -778,7 +856,6 @@ if (JType) {
         );
         var threadPool = new QueuedThreadPool(hijk.server.threadCount);
         var server = new Server(threadPool);
-
         if (hijk.server.port !== 0) {
             var connector = new ServerConnector(server);
             connector.setPort(Math.abs(hijk.server.port));
@@ -807,13 +884,13 @@ if (JType) {
             exit();
         }
         return server;
-    };
+    }
+    ;
     var run_script = function() {
         var count = 0;
         var script = "";
-
         function dbprint(ql, args) {
-            JType.Thread(function() {
+            JType.thread(function() {
                 var vs = [];
                 var c = 0;
                 var dt = java.lang.System.currentTimeMillis();
@@ -826,7 +903,6 @@ if (JType) {
                     });
                 });
                 dt = (java.lang.System.currentTimeMillis() - dt) / 1000.0;
-
                 for (var i = 0; i < vs.length; i++) {
                     if (script.length > 3) {
                         script = "";
@@ -855,7 +931,7 @@ if (JType) {
         print(tables.join(' '));
         print("dbprint( 'from table1' )");
         print("dbprint( 'from table1 where id < ? order by id limit 0 , 20' , [ 100 ] )");
-        print("online(); exit()");
+        print("online(); jsload('/tmp/my.js'); exit()");
         print(":");
         while (true) {
             var c = String.fromCharCode(java.lang.System.in.read());
@@ -880,7 +956,6 @@ if (JType) {
             }
         }
     };
-
     var toExceptionString = function(e) {
         return  hijk.dbexception + " " +
                 e.message + " " +
@@ -890,7 +965,6 @@ if (JType) {
                 e.columnNumber + "  " +
                 e.stack + "  ";
     };
-
     var DebugEditor = function(map, request, response) {
         var fname = request.getRequestURI().replaceAll("/edit/", "");
         if (((!fname.startsWith("js/")) && (!fname.startsWith("html/"))) || (fname.contains(".."))) {
@@ -969,15 +1043,19 @@ if (JType) {
                 "</form></body></html>";
         return html;
     };
-    if (hijk.debug) {
-        debug_load_system();
-    } else {
-        DebugEditor = function() {
-        };
-        debug_load_system = function() {
-        };
-        load_system();
+    try {
+        if (hijk.debug) {
+            debug_load_system();
+        } else {
+            DebugEditor = function() {
+            };
+            debug_load_system = function() {
+            };
+            load_system();
+        }
+        hijk.server.server = http_server_jetty();
+        run_script();
+    } catch (e) {
+        print(toExceptionString(e));
     }
-    hijk.server.server = http_server_jetty();
-    run_script();
 }
