@@ -147,19 +147,17 @@ hijk.api.table1_select_sum = function() {
 
 ```
 hijk.api.multi_thread = function() {
-    var results = JType.bqueue(2);
+    var results = sys.threadreturn(2);
 
     //Thread 1
-    JType.thread(function() {
-        for (var i = 1; i <= 100000; i++) {
-        }
+    sys.thread(function() {
+        for (var i = 1; i <= 10000; i++) {       }
         results.put("T01-" + c);
     });
 
     //Thread 2
-    JType.thread(function() {
-        for (var i = 100001; i <= 200000; i++) {
-        }
+    sys.thread(function() { 
+        for (var i = 10001; i <= 20000; i++) {   }
         results.put("T02-" + c);
     });
 
@@ -168,6 +166,7 @@ hijk.api.multi_thread = function() {
     rs.push(results.take());
     rs.push(results.take());
     rs.push(Date.now() - bg);
+
     return rs;
 };
 ```
