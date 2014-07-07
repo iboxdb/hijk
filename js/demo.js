@@ -473,3 +473,189 @@ hijk.api.processes = function()
     remote_process.close();
     return "check consoles " + (new Date());
 };
+
+// User-Session Demo
+hijk.table.user = {
+    data: {id: 0, name: "", password: "", regtime: Date.now(), online: Date.now(), sessionid: ""},
+    key: ["id"],
+    //true = unique index
+    index: [[true, "name"]],
+    new_id_pos: 1
+};
+
+function UserSessionClass() {
+    var Cookie = Java.type("javax.servlet.http.Cookie");
+
+    var hijksid = 'hijksid';
+    function createsid(uid) {
+        return  hijksid + uid + '_' + sys.uuid();
+    }
+
+    this.register = function(name, password) {
+        var c = hijk.db.selectCount("from user where name==?", name);
+        if (c > 0) {
+            return "exist 1";
+        }
+        var uid = hijk.db.id(hijk.table.user.new_id_pos);
+        var user = {
+            id: uid,
+            name: name,
+            password: password,
+            regtime: Date.now(),
+            online: Date.now(),
+            sessionid: createsid(uid)
+        };
+        if (hijk.db.insert('user', user)) {
+            return user.sessionid;
+        } else {
+            return "exist 2";
+        }
+    };
+
+
+    this.login = function(name, password, response) {
+        var user = null;
+        hijk.db.select("from user where name==?", name, function(u) {
+            if (u.password === password) {
+                user = u;
+                return false;
+            }
+        });
+        if (user) {
+            user = user.clone();
+            user.sessionid = createsid(user.id);
+            user.online = Date.now();
+            // save to database, use database to manage user-session-resources
+            if (hijk.db.update('user', user)) {
+                if (response) {
+                    var ck = new Cookie(hijksid, user.sessionid);
+                    ck.setMaxAge(60 * 60 * 24 * 365);
+                    ck.setPath("/");
+                    try {
+                        response.addCookie(ck);
+                    } catch (e) {
+                        print(e.message);
+                    }
+                }
+                return user.sessionid;
+            } else {
+                return "error";
+            }
+        } else {
+            return "empty";
+        }
+    };
+
+    this.getUserFromFullid = function(fullid) {
+        var pos = fullid.indexOf("_");
+        if (pos > 0) {
+            var uid = fullid.substring(hijksid.length, pos);
+            var user = hijk.db.selectKey('user', sys.int(uid));
+            if (user && (user.sessionid === fullid)) {
+                return user;
+            }
+        }
+        return "Session TimeOut";
+    };
+    this.getUserFromUri = function(request) {
+        var uri = request.getRequestURI().toString();
+        uri = JType.LastFrom(uri, hijksid);
+        if (uri.length > 0) {
+            return  this.getUserFromFullid(uri);
+        } else {
+            return "use /api/method/hijksid**_****";
+        }
+    };
+
+    this.getUserFromCookies = function(request) {
+        var cs = request.getCookies();
+        if (cs) {
+            for (var i = 0; i < cs.length; i++) {
+                var c = cs[i];
+                if (c.name === hijksid) {
+                    return this.getUserFromFullid(c.value);
+                }
+            }
+        }
+        return "No Cookie";
+    };
+
+    this.updateUserSession = function(user) {
+        if (hijk.db.update('user', user)) {
+            return user;
+        } else {
+            return "error";
+        }
+    };
+
+    this.logout = function(user) {
+        user = user.clone();
+        user.sessionid = "";
+        if (hijk.db.update('user', user)) {
+            return "OK";
+        } else {
+            return "error";
+        }
+    };
+
+}
+userManager = new UserSessionClass();
+
+hijk.api.user_register = function(map) {
+    var name = map.name[0];
+    var password = map.password[0];
+    return userManager.register(name, password);
+};
+
+hijk.api.user_login = function(map, request, response) {
+    var name = map.name[0];
+    var password = map.password[0];
+    return userManager.login(name, password, response);
+};
+
+// /api/user_helloworld/hijksid5_fdc5a8e9-69b6-4675-9602-6c63e7ba49df
+// 'hijksid5_fdc5a8e9-69b6-4675-9602-6c63e7ba49df' from login
+hijk.api.user_helloworld = function(map, request) {
+    return 'Hello World! uri ' + userManager.getUserFromUri(request);
+};
+
+//  /api/user_helloworld_cookie
+hijk.api.user_helloworld_cookie = function(map, request) {
+    return 'Hello World! cookie ' + userManager.getUserFromCookies(request);
+};
+
+//  /api/user_session_values?key1=aaa&key2=bbb
+hijk.api.user_session_values = function(map, request) {
+    var user = userManager.getUserFromUri(request);
+    if (!(user && user.sessionid)) {
+        user = userManager.getUserFromCookies(request);
+    }
+    if (!(user && user.sessionid)) {
+        return "No Session";
+    }
+    user = user.clone();
+    var changed = false;
+    for (var x in map) {
+        if (hijk.table.user.data.hasOwnProperty(x)) {
+            continue;
+        }
+        user[x] = map[x][0];
+        changed = true;
+    }
+    if (changed) {
+        return userManager.updateUserSession(user);
+    } else {
+        return user;
+    }
+};
+
+hijk.api.user_logout = function(map, request) {
+    var user = userManager.getUserFromUri(request);
+    if (!(user && user.sessionid)) {
+        user = userManager.getUserFromCookies(request);
+    }
+    if (!(user && user.sessionid)) {
+        return "No Session";
+    }
+    return userManager.logout(user);
+};

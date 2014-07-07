@@ -21,7 +21,7 @@ print("-----------------------");
 var hijk = {
     debug: true,
     title: "html iboxdb javascript kits",
-    version: "0.3.0.3",
+    version: "0.3.1 b",
     server: {
         port: 8080,
         sslport: 8081,
@@ -337,6 +337,14 @@ try {
                 }
             }
         },
+        LastFrom: function(str, tag) {
+            var pos = str.lastIndexOf(tag);
+            if (pos > 0) {
+                return str.substring(pos);
+            } else {
+                return "";
+            }
+        },
         _Connection_count: new java.util.concurrent.atomic.AtomicInteger(),
         _JSocket_sessions: null,
         JSocket: function() {
@@ -492,12 +500,14 @@ if (JType) {
                     var r = db.selectCount(ql, params);
                     return r;
                 };
+
                 this.selectKey = function(table, key) {
                     if (!(key instanceof Array)) {
                         key = [key];
                     }
                     return db.selectKey(table, Java.to(key));
                 };
+
                 this.update = function(table, value) {
                     if (!(value instanceof Array)) {
                         value = [value];
@@ -568,7 +578,16 @@ if (JType) {
                         db.getConfig().ensureTable(tableName, JType.Map(data), key);
                         if (index) {
                             for (var i = 0; i < index.length; i++) {
-                                db.getConfig().ensureIndex(tableName, JType.Map(data), index[i]);
+                                var names = index[i];
+                                var isUnique = false;
+                                if (names[0] === true) {
+                                    isUnique = true;
+                                    names.splice(0, 1);
+                                } else if (names[0] === false) {
+                                    isUnique = false;
+                                    names.splice(0, 1);
+                                }
+                                db.getConfig().ensureIndex(tableName, JType.Map(data), isUnique, names);
                             }
                         }
                     } catch (e) {
@@ -639,7 +658,23 @@ if (JType) {
         }
 
         JType.lock(load_system_inner);
+        if (hijk.onload) {
+            hijk.onload();
+            hijk.onload = null;
+        }
     };
+
+    exit = (function() {
+        var old_exit = exit;
+        return function() {
+            if (hijk.db) {
+                hijk.db.close();
+                hijk.db = null;
+            }
+            old_exit();
+        };
+    })();
+    quit = exit;
 
     hijk.server.last_load = 0;
     var debug_load_system = (function() {
@@ -717,7 +752,9 @@ if (JType) {
                     var fun = hijk.api[ api ];
                     if (fun) {
                         try {
-                            fun(socket, req, resp);
+                            var response = resp;
+                            response = null; //use socket.send() to response
+                            fun(socket, req.getHttpServletRequest(), response);
                         } catch (e) {
                             var msg = toExceptionString(e);
                             socket.send(msg);
@@ -810,7 +847,7 @@ if (JType) {
                     if (fname.length() < 1) {
                         continue;
                     }
-                    fname = fname.substring(fname.lastIndexOf("."));
+                    fname = JType.LastFrom(fname, ".");
                     fname = JType.uuid() + fname;
                     fi.write(new File("html/uploads/" + fname));
                     var path = "<a href='/uploads/" + fname + "' >online:" + fi.getName() + "</a>";
@@ -977,7 +1014,7 @@ if (JType) {
             print(tables.join(' '));
             print("dbprint( 'from table1' )");
             print("dbprint( 'from table1 where id < ? order by id limit 0 , 20' , [ 100 ] )");
-            print("online(); jsload('/tmp/my.js'); exit(); print(...); ( ...;...;...; ); help()");
+            print("online(); jsload('/tmp/my.js'); print(...); ( ...;...;...; ); exit(); help()");
             print(":");
         }
         help();
