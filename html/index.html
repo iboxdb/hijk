@@ -1,17 +1,23 @@
 <html>
     <script src="javascript/loadimg.js" type="text/javascript"></script>
     <script   type="text/javascript">
-        function hello() {
+        function request(api, fun) {
             var req = new XMLHttpRequest();
-            req.open("GET", "/api/helloworld2", true);
+            req.open("GET", api, true);
             req.onreadystatechange = function() {
                 if (req.readyState === 4 && (req.status === 304 || req.status === 200)) {
                     var o = eval("(" + req.responseText + ")");
-                    alert(o.MSG);
+                    fun(o);
                 }
             };
             req.send();
         }
+        function hello() {
+            request("/api/helloworld2", function(o) {
+                alert(o.MSG);
+            });
+        }
+
 
 
         var gsocket = null;
@@ -21,7 +27,8 @@
                 gsocket.send(msg);
                 return;
             }
-            var socket = new WebSocket('ws://localhost:8080/api/ws_helloname');
+
+            var socket = new WebSocket('ws://' + window.location.host + '/api/ws_helloname');
 
             socket.onopen = function(event) {
                 gsocket = socket;
@@ -51,5 +58,5 @@
         <p> <img id="img1" src="" alt="" onclick="hello();"></p>
         <p><button onclick="ws_hello();">WebSocket</button></p>
         <p><a href="/api/ws_upload">File Upload</a></p>
-</body>
+    </body>
 </html>

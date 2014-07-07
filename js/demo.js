@@ -12,8 +12,12 @@ hijk.api.helloworld3 = function() {
 
 //http://localhost:8080/api/get?id=99&name=andy
 hijk.api.get = function(map, request, response) {
+    var url = request.getRequestURL().toString();
+    var server = url.substring(0, url.indexOf("/api/get"));
+    server = server.replaceAll("http://", "").replaceAll("https://", "");
     var msg = {
-        url: request.getRequestURI()
+        url: url,
+        server: server
     };
     for (var x in map) {
         msg[x] = map[x][0];
@@ -323,24 +327,24 @@ hijk.api.table2_selectkey = function(map) {
 
 //Multi-Thread
 hijk.api.multi_thread = function() {
-    var results = JType.bqueue(2);
+    var results = sys.threadreturn(2);
 
     //Thread 1
-    JType.thread(function() {
+    sys.thread(function() {
         var c = 1;
         for (var i = 1; i <= 10000; i++) {
             c += i;
-            JType.sleep(0);
+            sys.sleep(0);
         }
         results.put("T01-" + c);
     });
 
     //Thread 2
-    JType.thread(function() {
+    sys.thread(function() {
         var c = 1;
         for (var i = 10001; i <= 20000; i++) {
             c += i;
-            JType.sleep(0);
+            sys.sleep(0);
         }
         results.put("T02-" + c);
     });
@@ -354,8 +358,51 @@ hijk.api.multi_thread = function() {
     return rs;
 };
 
+var thread_local = sys.threadvar(null);
+hijk.api.multi_thread_local = function() {
+    var results = sys.threadreturn(2);
+
+    var fun = function() {
+        var param = thread_local.get();
+        var start = param.start;
+        var end = param.end;
+        var id = param.id;
+        var c = 1;
+        for (var i = start; i <= end; i++) {
+            c += i;
+            sys.sleep(0);
+        }
+        results.put("T" + id + "-" + c);
+    };
+
+    //Thread 1
+    sys.thread(function() {
+        sys.sleep(10);
+        var param = {start: 1, end: 10000, id: "L01"};
+        thread_local.set(param);
+        fun();
+    });
+
+    //Thread 2
+    sys.thread(function() {
+        sys.sleep(10);
+        var param = {start: 10001, end: 20000, id: "L02"};
+        thread_local.set(param);
+        fun();
+    });
+
+    var rs = [];
+    var bg = Date.now();
+    rs.push(results.take());
+    rs.push(results.take());
+    rs.push(Date.now() - bg);
+
+    return rs;
+};
+
 //Distributed Programming 
 hijk.api.ws_eval = function(socket, request) {
+    print(socket.remoteid + " using javascript eval");
     socket.onmessage(function(script) {
         var fun = eval("(" + script + ")");
         return fun();
@@ -423,6 +470,6 @@ hijk.api.processes = function()
             });
 
     remote_process.send({action: 'close'});
-
-    return "check consoles";
+    remote_process.close();
+    return "check consoles " + (new Date());
 };

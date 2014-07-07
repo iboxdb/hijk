@@ -21,7 +21,7 @@ print("-----------------------");
 var hijk = {
     debug: true,
     title: "html iboxdb javascript kits",
-    version: "0.3.0.2",
+    version: "0.3.0.3",
     server: {
         port: 8080,
         sslport: 8081,
@@ -108,11 +108,6 @@ function build_run() {
 try {
 
     var JType = {
-        Extend: function(dest, src) {
-            for (var x in src) {
-                dest[x] = src[x];
-            }
-        },
         int: function(str) {
             return java.lang.Integer.valueOf(str);
         },
@@ -120,15 +115,12 @@ try {
             return java.lang.Long.valueOf(str);
         },
         map: function() {
+            // m.put(name,value); m.get(name)
             return new java.util.concurrent.ConcurrentHashMap();
         },
         queue: function() {
             //q.add(v); v=q.poll(); 
             return new java.util.concurrent.ConcurrentLinkedQueue();
-        },
-        bqueue: function(max) {
-            //q.put(v); v=q.take()
-            return new java.util.concurrent.ArrayBlockingQueue(max);
         },
         lock: (function() {
             var TypeBoxSystem = Java.type("iBoxDB.LocalServer.BoxSystem");
@@ -146,12 +138,36 @@ try {
                 pool.execute(fun);
             };
         })(),
+        threadvar: function(value) {
+            // tl.get(); tl.set(v);
+            var t = new (Java.extend(java.lang.ThreadLocal, {
+                initialValue: function() {
+                    return value;
+                }
+            }))();
+            return t;
+        },
+        threadreturn: function(thread_num) {
+            //q.put(v); v=q.take()
+            return new java.util.concurrent.ArrayBlockingQueue(thread_num);
+        },
         sleep: function(millis) {
-            java.lang.Thread.sleep(millis);
+            if (millis < 0) {
+                return java.lang.Thread.currentThread().getId();
+            } else {
+                java.lang.Thread.sleep(millis);
+                return null;
+            }
         },
         uuid: function() {
             return java.util.UUID.randomUUID().toString();
         },
+        appid: (function() {
+            var al = new java.util.concurrent.atomic.AtomicLong();
+            return function() {
+                return al.incrementAndGet();
+            }
+        })(),
         proxy: function(value) {
             var ap = new java.util.concurrent.atomic.AtomicReference(value);
             return {
@@ -227,22 +243,17 @@ try {
                         addrs.push(e.getHostAddress());
                     }
                 }
-                return addrs.join("; ");
+                return addrs.join("\n");
             } catch (e) {
                 return e.message;
             }
-        }
-    };
-    JType.Extend(JType, {
+        },
+        //--------------------------------------------------------
+        //-Internal-----------------------------------------------
+        //--------------------------------------------------------
         TypeLocal: Java.type("iBoxDB.LocalServer.Local"),
         Random: new java.util.Random(),
         UTF8: java.nio.charset.Charset.forName("UTF-8"),
-        NewAppID: (function() {
-            var al = new java.util.concurrent.atomic.AtomicLong();
-            return function() {
-                return al.incrementAndGet();
-            }
-        })(),
         Date: function(d) {
             if (d) {
                 return new java.util.Date(d.getTime());
@@ -329,7 +340,7 @@ try {
         _Connection_count: new java.util.concurrent.atomic.AtomicInteger(),
         _JSocket_sessions: null,
         JSocket: function() {
-            this.uid = JType.NewAppID();
+            this.uid = JType.appid();
             this.session = null;
             this._onmessage = null;
             this.remoteid = "";
@@ -395,7 +406,7 @@ try {
             }
             ;
         }
-    });
+    };
 } catch (e) {
     build_run();
     exit();
@@ -629,7 +640,7 @@ if (JType) {
 
         JType.lock(load_system_inner);
     };
-    var jsload = load_system;
+
     hijk.server.last_load = 0;
     var debug_load_system = (function() {
         var fileCache = {};
@@ -907,31 +918,37 @@ if (JType) {
     }
     ;
     var run_script = function() {
+        var global = {};
         var count = 0;
         var script = JType.proxy("");
         function dbprint(ql, args) {
             JType.thread(function() {
-                var vs = [];
-                var c = 0;
-                var dt = java.lang.System.currentTimeMillis();
-                hijk.db.cube(function(box) {
-                    box.select(ql, args, function(v) {
-                        vs.push(JType.JSONLocal(v));
-                        if (((++c) % 10000) === 9999) {
-                            print("loading " + c);
-                        }
+                try {
+                    var vs = [];
+                    var c = 0;
+                    var dt = java.lang.System.currentTimeMillis();
+                    hijk.db.cube(function(box) {
+                        box.select(ql, args, function(v) {
+                            vs.push(JType.JSONLocal(v));
+                            if (((++c) % 10000) === 9999) {
+                                print("loading " + c);
+                            }
+                        });
                     });
-                });
-                dt = (java.lang.System.currentTimeMillis() - dt) / 1000.0;
-                for (var i = 0; i < vs.length; i++) {
-                    if (script.get().length > 2) {
-                        script.set("");
-                        count = 0;
-                        break;
+                    dt = (java.lang.System.currentTimeMillis() - dt) / 1000.0;
+                    for (var i = 0; i < vs.length; i++) {
+                        if (script.get().length > 2) {
+                            script.set("");
+                            count = 0;
+                            break;
+                        }
+                        print(vs[i]);
                     }
-                    print(vs[i]);
+                    print("Count: " + vs.length + ",  Time: " + dt);
+                } catch (e)
+                {
+                    print("[" + e.message + "]");
                 }
-                print("Count: " + vs.length + ",  Time: " + dt);
             });
         }
         function online() {
@@ -954,12 +971,17 @@ if (JType) {
             }
         }
         );
-        print("");
-        print(tables.join(' '));
-        print("dbprint( 'from table1' )");
-        print("dbprint( 'from table1 where id < ? order by id limit 0 , 20' , [ 100 ] )");
-        print("online(); jsload('/tmp/my.js'); exit()");
-        print(":");
+
+        function help() {
+            print("");
+            print(tables.join(' '));
+            print("dbprint( 'from table1' )");
+            print("dbprint( 'from table1 where id < ? order by id limit 0 , 20' , [ 100 ] )");
+            print("online(); jsload('/tmp/my.js'); exit(); print(...); ( ...;...;...; ); help()");
+            print(":");
+        }
+        help();
+
         while (true) {
             var c = String.fromCharCode(java.lang.System.in.read());
             script.set(script.get() + c);
@@ -969,14 +991,19 @@ if (JType) {
             if (c === ')') {
                 count--;
                 if (count <= 0) {
-                    var s = "(function(){ " +
-                            script.get() + " })()";
-                    script.set("");
-                    count = 0;
                     try {
+                        var s = script.get().toString().trim();
+                        if (s[0] === '(') {
+                            s = s.substr(1, s.length - 2);
+                        }
+                        s = "(function(){ " +
+                                s + " })()";
+                        script.set("");
+                        count = 0;
+
                         eval(s);
                     } catch (e) {
-                        print(e.message + " ");
+                        print("[" + e.message + "]");
                     }
                     print(":");
                 }
@@ -1070,7 +1097,11 @@ if (JType) {
                 "</form></body></html>";
         return html;
     };
+
     try {
+        var sys = JType;
+        var jsload = load_system;
+
         if (hijk.debug) {
             debug_load_system();
         } else {
