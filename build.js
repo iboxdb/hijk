@@ -21,7 +21,7 @@ print("-----------------------");
 var hijk = {
     debug: true,
     title: "html iboxdb javascript kits",
-    version: "0.3.0.1",
+    version: "0.3.0.2",
     server: {
         port: 8080,
         sslport: 8081,
@@ -153,13 +153,13 @@ try {
             return java.util.UUID.randomUUID().toString();
         },
         proxy: function(value) {
+            var ap = new java.util.concurrent.atomic.AtomicReference(value);
             return {
                 get: function() {
-                    return value;
+                    return ap.get();
                 },
                 set: function(v) {
-                    value = v;
-                    return v;
+                    ap.set(v);
                 }
             };
         },
@@ -802,7 +802,7 @@ if (JType) {
                     fname = fname.substring(fname.lastIndexOf("."));
                     fname = JType.uuid() + fname;
                     fi.write(new File("html/uploads/" + fname));
-                    var path = "<a href='http://localhost:8080/uploads/" + fname + "' >online:" + fi.getName() + "</a>";
+                    var path = "<a href='/uploads/" + fname + "' >online:" + fi.getName() + "</a>";
                     saves.push(path);
                 }
                 var outp = resp.getWriter();
@@ -924,7 +924,7 @@ if (JType) {
                 });
                 dt = (java.lang.System.currentTimeMillis() - dt) / 1000.0;
                 for (var i = 0; i < vs.length; i++) {
-                    if (script.get().length > 3) {
+                    if (script.get().length > 2) {
                         script.set("");
                         count = 0;
                         break;
