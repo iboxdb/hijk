@@ -21,7 +21,7 @@ print("-----------------------");
 var hijk = {
     debug: true,
     title: "html iboxdb javascript kits",
-    version: "0.3.1 b",
+    version: "0.3.1",
     server: {
         port: 8080,
         sslport: 8081,
