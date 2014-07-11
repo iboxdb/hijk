@@ -29,10 +29,6 @@ hijk.api.get = function(map, request, response) {
 // web scoket , open two browsers
 var ws_hellonameusers = JType.map();
 hijk.api.ws_helloname = function(socket, request, response) {
-    socket.onclose(function() {
-        ws_hellonameusers.remove(socket.uid);
-    });
-    ws_hellonameusers.put(socket.uid, socket);
 
     socket.name = "";
     var sendall = function(msg) {
@@ -52,6 +48,12 @@ hijk.api.ws_helloname = function(socket, request, response) {
                 socket.name = name;
                 sendall("Welcome " + name);
                 socket.send("Hello " + name + " message:")
+
+                ws_hellonameusers.put(socket.uid, socket);
+                socket.onclose(function() {
+                    ws_hellonameusers.remove(socket.uid);
+                    print(socket.uid + " closed, online_count:" + ws_hellonameusers.size());
+                });
                 //return new onmessage handler
                 return function(msg) {
                     if (msg === "close") {
@@ -461,7 +463,7 @@ hijk.api.processes = function()
             print("show time and send back");
             var dt = new Date();
             print(JSON.stringify(dt));
-            socket.send(dt);
+            socket.send(socket.uid + ":" + JSON.stringify(dt));
         }.toString()});
 
     remote_process.send({action: 'running'})

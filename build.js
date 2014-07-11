@@ -21,7 +21,7 @@ print("-----------------------");
 var hijk = {
     debug: true,
     title: "html iboxdb javascript kits",
-    version: "0.3.1",
+    version: "0.3.2",
     server: {
         port: 8080,
         sslport: 8081,
@@ -248,6 +248,65 @@ try {
                 return e.message;
             }
         },
+        readfile: (function() {
+            var TypeRandomAccessFile = Java.type("java.io.RandomAccessFile");
+            var TypeBytes = Java.type("byte[]");
+            var TypeFile = Java.type("java.io.File");
+            var TypeString = Java.type("java.lang.String");
+            return function(path) {
+                var file = new TypeFile(path);
+                if (!file.exists()) {
+                    var dirPath = path.substring(0, path.lastIndexOf("/"));
+                    (new TypeFile(dirPath)).mkdirs();
+                }
+                if (file.isDirectory()) {
+                    return "";
+                }
+                var rf = new TypeRandomAccessFile(file, "rw");
+                try {
+                    if (rf.length() > 0) {
+                        var bs = new TypeBytes(rf.length());
+                        rf.read(bs);
+                        return new TypeString(bs, JType.UTF8);
+                    }
+                } finally {
+                    rf.close();
+                }
+                return "";
+            };
+        })(),
+        writefile: (function() {
+            var TypeRandomAccessFile = Java.type("java.io.RandomAccessFile");
+            var TypeFile = Java.type("java.io.File");
+
+            return function(path, txt, append) {
+                var file = new TypeFile(path);
+                if (!file.exists()) {
+                    var dirPath = path.substring(0, path.lastIndexOf("/"));
+                    (new TypeFile(dirPath)).mkdirs();
+                }
+                if (file.isDirectory()) {
+                    return false;
+                }
+                if (!txt) {
+                    txt = "";
+                }
+                file = new TypeFile(path);
+                var rf = new TypeRandomAccessFile(file, "rw");
+                try {
+                    if (append) {
+                        rf.seek(rf.length());
+                    } else {
+                        rf.setLength(0);
+                        rf.seek(0);
+                    }
+                    rf.write(txt.toString().getBytes(JType.UTF8));
+                } finally {
+                    rf.close();
+                }
+                return true;
+            };
+        })(),
         //--------------------------------------------------------
         //-Internal-----------------------------------------------
         //--------------------------------------------------------
@@ -354,6 +413,8 @@ try {
             this.remoteid = "";
             this.msgbuffer = JType.queue();
             this._msg_state = null;
+            this.isclosed = false;
+
             this.onmessage = function(fun, state) {
                 this._onmessage = fun;
                 this._msg_state = state;
@@ -363,6 +424,9 @@ try {
             this._onclose = null;
             this.onclose = function(fun) {
                 this._onclose = fun;
+                if (this.isclosed && this._onclose) {
+                    this._onclose(null);
+                }
                 return this;
             };
             this.send = function(msg) {
@@ -380,6 +444,7 @@ try {
                     this.session.close();
                     return this;
                 } catch (e) {
+                    print(__LINE__, this.uid, toExceptionString(e));
                     return e;
                 }
             };
@@ -391,6 +456,7 @@ try {
             };
             this._callclose = function(reason) {
                 JType._JSocket_sessions.remove(this.uid);
+                this.isclosed = true;
                 if (this._onclose) {
                     this._onclose(reason);
                 }
@@ -1065,50 +1131,16 @@ if (JType) {
         var TypeBytes = Java.type("byte[]");
         var TypeFile = Java.type("java.io.File");
         var TypeString = Java.type("java.lang.String");
+
         function read_file(path) {
-            var file = new TypeFile(path);
-            if (!file.exists()) {
-                var dirPath = path.substring(0, path.lastIndexOf("/"));
-                (new TypeFile(dirPath)).mkdirs();
-            }
-            if (file.isDirectory()) {
-                return "";
-            }
-            var rf = new TypeRandomAccessFile(file, "rw");
-            try {
-                if (rf.length() > 0) {
-                    var bs = new TypeBytes(rf.length());
-                    rf.read(bs);
-                    return new TypeString(bs, JType.UTF8);
-                }
-            } finally {
-                rf.close();
-            }
-            return "";
+            return JType.readfile(path);
         }
 
         function write_file(path, txt, append) {
-            var file = new TypeFile(path);
-            if (file.isDirectory()) {
-                return;
+            if (append) {
+                txt = "\r\n//----" + (new Date()) + "----\r\n" + txt;
             }
-            if (!txt) {
-                txt = "";
-            }
-            file = new TypeFile(path);
-            var rf = new TypeRandomAccessFile(file, "rw");
-            try {
-                if (append) {
-                    rf.seek(rf.length());
-                    txt = "\r\n//----" + (new Date()) + "----\r\n" + txt;
-                } else {
-                    rf.setLength(0);
-                    rf.seek(0);
-                }
-                rf.write(txt.toString().getBytes(JType.UTF8));
-            } finally {
-                rf.close();
-            }
+            return JType.writefile(path, txt, append);
         }
 
         var msg = "";
