@@ -287,7 +287,7 @@ hijk.api.processes = function()
             var dt = new Date();
             print(JSON.stringify(dt));
             socket.send(socket.uid + ":" + JSON.stringify(dt));
-        }.toString()});
+        }});
 
     remote_process.send({action: 'running'})
             .onmessage(function(msg) {

@@ -22,7 +22,7 @@ print("-----------------------");
 var hijk = {
     debug: true,
     title: "html iboxdb javascript kits",
-    version: "0.4 b",
+    version: "0.4",
     server: {
         port: 8080,
         sslport: 8081,
@@ -33,7 +33,7 @@ var hijk = {
     },
     //Max Cache  java.lang.Integer.MAX_VALUE
     dbCachePageCount: -1,
-    //Thread Count
+    //Thread Count Max=99
     dbReadStreamCount: -1,
     //file path
     dbaddress: 1,
@@ -411,13 +411,16 @@ try {
             var jo = [];
             for (var x in local) {
                 if (jo.length > 0) {
-                    jo.push(',');
+                    jo.push(",");
                 }
+                jo.push("\"");
                 jo.push(x);
-                jo.push(':');
+                jo.push("\":");
                 var y = local[x];
                 if (typeof y === "string" || typeof y === "number") {
                     jo.push(JSON.stringify(y));
+                } else if (typeof y === "function") {
+                    jo.push(JSON.stringify(y.toString()));
                 } else {
                     jo.push(JType.stringify(y));
                 }
@@ -425,7 +428,7 @@ try {
             if (jo.length === 0) {
                 return JSON.stringify(local);
             } else {
-                return "{" + jo.join('') + "}";
+                return "{" + jo.join("") + "}";
             }
         },
         now: function() {
@@ -550,7 +553,7 @@ try {
             this.send = function(msg) {
                 try {
                     var rem = this.session.getRemote();
-                    rem.sendStringByFuture(JType.stringify(msg));
+                    rem.sendStringByFuture(sys.stringify(msg));
                     return this;
                 } catch (e) {
                     print(__LINE__, this.uid, toExceptionString(e));
