@@ -171,6 +171,15 @@ hijk.api.get_bridge = function() {
 };
 ```
 
+#####File Upload
+```
+hijk.api.upload = function(map, request) {
+   sys.upload(request, function(file) { 
+        file.write("html/uploads/newname.png" );
+    });
+};
+```
+
 ######JavaScript Multi-Thread
 
 ```
