@@ -10,6 +10,7 @@
 //Project Properties -> Run -> Working Directory = __DIR__
 //print(__FILE__, __LINE__, __DIR__);
 
+//examples -> js/demo.js
 
 "use strict";
 print("Javascript WebAPI Development Package");
@@ -21,7 +22,7 @@ print("-----------------------");
 var hijk = {
     debug: true,
     title: "html iboxdb javascript kits",
-    version: "0.3.2",
+    version: "0.4 b",
     server: {
         port: 8080,
         sslport: 8081,
@@ -231,6 +232,77 @@ try {
                 return socket;
             };
         })(),
+        upload: (function() {
+            var DiskFileItemFactory = Java.type("org.apache.commons.fileupload.disk.DiskFileItemFactory");
+            var ServletFileUpload = Java.type("org.apache.commons.fileupload.servlet.ServletFileUpload");
+            var File = Java.type("java.io.File");
+
+            var ud = new File("html/uploads/");
+            ud.mkdir();
+            var of = new File("html/uploads/temp/");
+            of.mkdir();
+            var lf = of.listFiles();
+            for (var i = 0; i < lf.length; i++) {
+                lf[i].delete();
+            }
+
+            var factory = new DiskFileItemFactory();
+            factory.setSizeThreshold(4096);
+            factory.setRepository(of);
+            var upload = new ServletFileUpload(factory);
+            upload.setSizeMax(1024 * 1024 * 2);
+            return function(req, fun) {
+                var fileItems = upload.parseRequest(req);
+                if (fileItems && fun) {
+                    var i = fileItems.iterator();
+                    while (i.hasNext()) {
+                        var fi = i.next();
+                        var fname = fi.name;
+                        if (fname && fname.length() > 0) {
+                            var f = {
+                                name: fname,
+                                fileItem: fi,
+                                write: function(path) {
+                                    this.fileItem.write(new File(path));
+                                }
+                            }
+                            fun(f);
+                        }
+                    }
+                }
+            };
+        })(),
+        cookie: (function() {
+            // c.name, c.value
+            var Cookie = Java.type("javax.servlet.http.Cookie");
+            return function(requestORresponse, name, value, maxAge) {
+                if (value) {
+                    if (requestORresponse) {
+                        var ck = new Cookie(name, value);
+                        if (!maxAge) {
+                            maxAge = -1;
+                        }
+                        ck.maxAge = maxAge;
+                        ck.path = "/";
+                        requestORresponse.addCookie(ck);
+                        return ck;
+                    }
+                } else {
+                    if (requestORresponse) {
+                        var cs = requestORresponse.cookies;
+                        if (cs) {
+                            for (var i = 0; i < cs.length; i++) {
+                                var c = cs[i];
+                                if (c.name === name) {
+                                    return c;
+                                }
+                            }
+                        }
+                    }
+                }
+                return null;
+            };
+        })(),
         localhost: function() {
             try {
                 var addrs = [];
@@ -248,65 +320,117 @@ try {
                 return e.message;
             }
         },
-        readfile: (function() {
+        file: (function() {
             var TypeRandomAccessFile = Java.type("java.io.RandomAccessFile");
             var TypeBytes = Java.type("byte[]");
             var TypeFile = Java.type("java.io.File");
             var TypeString = Java.type("java.lang.String");
-            return function(path) {
-                var file = new TypeFile(path);
-                if (!file.exists()) {
-                    var dirPath = path.substring(0, path.lastIndexOf("/"));
-                    (new TypeFile(dirPath)).mkdirs();
-                }
-                if (file.isDirectory()) {
-                    return "";
-                }
-                var rf = new TypeRandomAccessFile(file, "rw");
-                try {
-                    if (rf.length() > 0) {
-                        var bs = new TypeBytes(rf.length());
-                        rf.read(bs);
-                        return new TypeString(bs, JType.UTF8);
-                    }
-                } finally {
-                    rf.close();
-                }
-                return "";
-            };
-        })(),
-        writefile: (function() {
-            var TypeRandomAccessFile = Java.type("java.io.RandomAccessFile");
-            var TypeFile = Java.type("java.io.File");
 
-            return function(path, txt, append) {
-                var file = new TypeFile(path);
-                if (!file.exists()) {
-                    var dirPath = path.substring(0, path.lastIndexOf("/"));
-                    (new TypeFile(dirPath)).mkdirs();
-                }
-                if (file.isDirectory()) {
-                    return false;
-                }
-                if (!txt) {
-                    txt = "";
-                }
-                file = new TypeFile(path);
-                var rf = new TypeRandomAccessFile(file, "rw");
-                try {
-                    if (append) {
-                        rf.seek(rf.length());
-                    } else {
-                        rf.setLength(0);
-                        rf.seek(0);
+            function JFile(_file, _path) {
+                this.file = _file;
+                this.path = _path;
+                this.html = "";
+                this.lastModified = -1;
+            }
+            JFile.prototype = {
+                read: function() {
+                    var path = this.path;
+                    var file = this.file;
+                    if ((!file.exists()) || file.isDirectory()) {
+                        return "";
                     }
-                    rf.write(txt.toString().getBytes(JType.UTF8));
-                } finally {
-                    rf.close();
+                    var rf = new TypeRandomAccessFile(file, "rw");
+                    try {
+                        if (rf.length() > 0) {
+                            var bs = new TypeBytes(rf.length());
+                            rf.read(bs);
+                            return new TypeString(bs, JType.UTF8);
+                        }
+                    } finally {
+                        rf.close();
+                    }
+                    return "";
+                },
+                write: function(txt, append) {
+                    var path = this.path;
+                    var file = this.file;
+                    if (!file.exists()) {
+                        var dirPath = path.substring(0, path.lastIndexOf("/"));
+                        (new TypeFile(dirPath)).mkdirs();
+                    }
+                    if (file.isDirectory()) {
+                        return false;
+                    }
+                    if (!txt) {
+                        return false;
+                    }
+                    file = new TypeFile(path);
+                    var rf = new TypeRandomAccessFile(file, "rw");
+                    try {
+                        if (append) {
+                            rf.seek(rf.length());
+                        } else {
+                            rf.setLength(0);
+                            rf.seek(0);
+                        }
+                        rf.write(txt.toString().getBytes(JType.UTF8));
+                    } finally {
+                        rf.close();
+                    }
+                    return true;
+
                 }
-                return true;
+            };
+            var fileCache = new java.util.concurrent.ConcurrentHashMap();
+            return function(path) {
+                var ch = fileCache[path];
+                if (!ch) {
+                    ch = new JFile(new TypeFile(path), path);
+                    fileCache[path] = ch;
+                }
+                var lm = ch.file.lastModified();
+                if (ch.lastModified === lm) {
+                    return ch;
+                }
+                ch.html = ch.read();
+                ch.lastModified = lm;
+                return ch;
             };
         })(),
+        stringify: function(local) {
+            if (!local) {
+                return JSON.stringify(local);
+            }
+            if (typeof local === "string") {
+                return local;
+            }
+            if ((local instanceof Array) || (local instanceof java.util.Map)
+                    || (local instanceof java.lang.Iterable)) {
+                return JType.JSONLocal(local);
+            }
+            var jo = [];
+            for (var x in local) {
+                if (jo.length > 0) {
+                    jo.push(',');
+                }
+                jo.push(x);
+                jo.push(':');
+                var y = local[x];
+                if (typeof y === "string" || typeof y === "number") {
+                    jo.push(JSON.stringify(y));
+                } else {
+                    jo.push(JType.stringify(y));
+                }
+            }
+            if (jo.length === 0) {
+                return JSON.stringify(local);
+            } else {
+                return "{" + jo.join('') + "}";
+            }
+        },
+        now: function() {
+            return java.lang.System.currentTimeMillis();
+        },
         //--------------------------------------------------------
         //-Internal-----------------------------------------------
         //--------------------------------------------------------
@@ -347,13 +471,8 @@ try {
                 return null;
             }
         },
-        JSONLocal: function(local, force) {
+        JSONLocal: function(local) {
             if (local) {
-                if (!force) {
-                    if ((typeof local === "string") || local instanceof String || local instanceof java.lang.String) {
-                        return local;
-                    }
-                }
                 var ch = this.AppTag(local);
                 if (ch) {
                     return ch;
@@ -376,14 +495,14 @@ try {
                 } else if (local instanceof Array) {
                     var r = [];
                     for (var i = 0; i < local.length; i++) {
-                        r.push(this.JSONLocal(local[i], true));
+                        r.push(this.JSONLocal(local[i]));
                     }
                     return "[" + r.join(",") + "]";
                 } else {
                     return JSON.stringify(local);
                 }
             } else {
-                return local;
+                return JSON.stringify(local);
             }
         },
         ForEach: function(src, fun) {
@@ -414,7 +533,6 @@ try {
             this.msgbuffer = JType.queue();
             this._msg_state = null;
             this.isclosed = false;
-
             this.onmessage = function(fun, state) {
                 this._onmessage = fun;
                 this._msg_state = state;
@@ -431,8 +549,8 @@ try {
             };
             this.send = function(msg) {
                 try {
-                    this.session.getRemote()
-                            .sendStringByFuture(JType.JSONLocal(msg));
+                    var rem = this.session.getRemote();
+                    rem.sendStringByFuture(JType.stringify(msg));
                     return this;
                 } catch (e) {
                     print(__LINE__, this.uid, toExceptionString(e));
@@ -481,6 +599,7 @@ try {
             ;
         }
     };
+    var sys = JType;
 } catch (e) {
     build_run();
     exit();
@@ -566,14 +685,12 @@ if (JType) {
                     var r = db.selectCount(ql, params);
                     return r;
                 };
-
                 this.selectKey = function(table, key) {
                     if (!(key instanceof Array)) {
                         key = [key];
                     }
                     return db.selectKey(table, Java.to(key));
                 };
-
                 this.update = function(table, value) {
                     if (!(value instanceof Array)) {
                         value = [value];
@@ -616,7 +733,6 @@ if (JType) {
                 var TypeDB = Java.type("iBoxDB.LocalServer.DB");
                 TypeDB.root("iboxdb/");
                 var db = new TypeDB(hijk.dbaddress);
-
                 var config = db.getConfig().Config;
                 if (hijk.dbCachePageCount > 0) {
                     var ccfield = config.getClass().getField('CachePageCount');
@@ -729,7 +845,6 @@ if (JType) {
             hijk.onload = null;
         }
     };
-
     exit = (function() {
         var old_exit = exit;
         return function() {
@@ -741,12 +856,11 @@ if (JType) {
         };
     })();
     quit = exit;
-
     hijk.server.last_load = 0;
     var debug_load_system = (function() {
-        var fileCache = {};
+        var fileCache = JType.map();
         return function() {
-            if ((java.lang.System.currentTimeMillis() - hijk.server.last_load) > 5000) {
+            if ((JType.now() - hijk.server.last_load) > 5000) {
                 var changed = "";
                 var ff = (new java.io.File("js")).listFiles();
                 for (var i = 0; i < ff.length; i++) {
@@ -763,7 +877,7 @@ if (JType) {
                     print("-----------------------");
                     print("Reload: " + changed);
                     load_system();
-                    hijk.server.last_load = java.lang.System.currentTimeMillis();
+                    hijk.server.last_load = JType.now();
                 }
             }
         };
@@ -773,21 +887,42 @@ if (JType) {
         if (hijk.exception) {
             return toExceptionString(hijk.exception);
         } else {
-            hijk.server.last_load = java.lang.System.currentTimeMillis();
+            hijk.server.last_load = sys.now();
             var ks = request.getRequestURI().split("/");
             var fun = hijk.api[ks[2]];
             if (fun) {
                 try {
                     var r = fun(request.getParameterMap(), request, response);
-                    return JType.JSONLocal(r);
+                    return JType.stringify(r);
                 } catch (e) {
                     return toExceptionString(e);
                 }
             } else {
-                return JType.JSONLocal({MSG: 'NotAPI'});
+                return JType.stringify({MSG: 'NotAPI'});
             }
         }
     };
+    var html_api_process = function(request, response) {
+        var uri = request.getRequestURI().toString();
+        if (uri.startsWith("/edit/")) {
+            return DebugEditor(request.getParameterMap(), request, response);
+        }
+
+        debug_load_system();
+        if (hijk.exception) {
+            return null;
+        } else {
+            hijk.server.last_load = sys.now();
+            var fun = hijk.api[uri];
+            if (fun) {
+                var file = JType.file("html/" + uri);
+                var r = fun(file, request.getParameterMap(), request, response);
+                return r.toString();
+            }
+        }
+        return null;
+    };
+
     JType.WebSocketListener = Java.type("org.eclipse.jetty.websocket.api.WebSocketListener");
     var ws_api_process = function(req, resp) {
 
@@ -814,7 +949,7 @@ if (JType) {
                     socket.send(toExceptionString(hijk.exception));
                     socket.close();
                 } else {
-                    hijk.server.last_load = java.lang.System.currentTimeMillis();
+                    hijk.server.last_load = sys.now();
                     var fun = hijk.api[ api ];
                     if (fun) {
                         try {
@@ -827,7 +962,7 @@ if (JType) {
                             socket.close();
                         }
                     } else {
-                        socket.send(JType.JSONLocal({MSG: 'NotAPI'}));
+                        socket.send(JType.stringify({MSG: 'NotAPI'}));
                         socket.close();
                     }
                 }
@@ -851,13 +986,13 @@ if (JType) {
         var ServletHolder = Java.type("org.eclipse.jetty.servlet.ServletHolder");
         var WebSocketCreator = Java.type("org.eclipse.jetty.websocket.servlet.WebSocketCreator");
         var WebSocketHandler = Java.type("org.eclipse.jetty.websocket.server.WebSocketHandler");
-        var HttpServlet = Java.type("javax.servlet.http.HttpServlet");
-        var File = Java.type("java.io.File");
 
+        var welcomeFile = "index.html";
         var html = new ResourceHandler();
         html.setDirectoriesListed(hijk.debug);
         html.setResourceBase("./html");
-        html.setWelcomeFiles(["index.html"]);
+        html.setWelcomeFiles([welcomeFile]);
+
         var ws = new WebSocketServlet({
             configure: function(factory) {
                 factory.getPolicy().setIdleTimeout(java.lang.Long.MAX_VALUE / 2);
@@ -868,71 +1003,12 @@ if (JType) {
                             }
                         }));
             }});
-        var parseRequest = (function() {
-            var DiskFileItemFactory = Java.type("org.apache.commons.fileupload.disk.DiskFileItemFactory");
-            var ServletFileUpload = Java.type("org.apache.commons.fileupload.servlet.ServletFileUpload");
-            var ud = new File("html/uploads/");
-            ud.mkdir();
-            var of = new File("html/uploads/temp/");
-            of.mkdir();
-            var lf = of.listFiles();
-            for (var i = 0; i < lf.length; i++) {
-                lf[i].delete();
-            }
-
-            var factory = new DiskFileItemFactory();
-            factory.setSizeThreshold(4096);
-            factory.setRepository(of);
-
-            var upload = new ServletFileUpload(factory);
-            upload.setSizeMax(1024 * 1024 * 1);
-            return function(req) {
-                return upload.parseRequest(req);
-            };
-        })();
-        var upload = new HttpServlet({
-            doPrint: function(outp, msg) {
-                var txt = "<html><body><h3>FileUpload</h3>\n\
- <form action='/api/ws_upload' method='post' enctype='multipart/form-data'>\n\
-<input type='file' name='userfile1' />\n\
-<input type='submit' value='Submit' /><input type='reset' value='Reset' /></form><div id='msg'>";
-                txt += (msg + "</div></body></html>");
-                outp.print(txt);
-            },
-            doGet: function(req, resp) {
-                var outp = resp.getWriter();
-                this.doPrint(outp, "");
-            },
-            doPost: function(req, resp) {
-                var saves = [];
-                var fileItems = parseRequest(req);
-                var i = fileItems.iterator();
-                while (i.hasNext()) {
-                    var fi = i.next();
-                    var fname = fi.getName();
-                    if (fname.length() < 1) {
-                        continue;
-                    }
-                    fname = JType.LastFrom(fname, ".");
-                    fname = JType.uuid() + fname;
-                    fi.write(new File("html/uploads/" + fname));
-                    var path = "<a href='/uploads/" + fname + "' >online:" + fi.getName() + "</a>";
-                    saves.push(path);
-                }
-                var outp = resp.getWriter();
-                this.doPrint(outp, saves.join(";"));
-            }
-        });
-        var servlet = new ServletContextHandler(
-                ServletContextHandler.NO_SESSIONS
-                );
+        var servlet = new ServletContextHandler(ServletContextHandler.NO_SESSIONS);
         servlet.setContextPath("/");
-
-        servlet.addServlet(new ServletHolder(upload), "/api/ws_upload");
-        servlet.addServlet(new ServletHolder(ws), "/api/*");
-
+        servlet.addServlet(new ServletHolder(ws), "/");
 
         var conn_count = JType._Connection_count;
+        welcomeFile = ("/" + welcomeFile).toString();
         var api = new Handler(
                 {
                     setServer: function(server) {
@@ -949,6 +1025,14 @@ if (JType) {
                         html.start();
                         servlet.start();
                     },
+                    rewrite: function(request) {
+                        var path = request.getRequestURI().toString();
+                        if (path === "/") {
+                            path = welcomeFile;
+                            request.setRequestURI(path);
+                        }
+                        return path;
+                    },
                     handle: function(target,
                             baseRequest,
                             request,
@@ -956,18 +1040,21 @@ if (JType) {
                             ) {
                         conn_count.incrementAndGet();
                         try {
+                            var path = this.rewrite(request);
                             var r = null;
-                            if (request.getRequestURI().startsWith("/edit/")) {
-                                r = DebugEditor(request.getParameterMap(), request, response);
-                                r = JType.JSONLocal(r);
-                            } else if (request.getRequestURI().startsWith("/api/ws_")) {
-                                // WebSocket 
-                                servlet.handle(target, baseRequest,
-                                        request,
-                                        response);
-                            } else if (request.getRequestURI().startsWith("/api/")) {
-                                //Http Https
-                                r = api_process(request, response);
+                            if (path.startsWith("/api/")) {
+                                if (path.startsWith("/api/ws_")) {
+                                    // WebSocket 
+                                    servlet.handle(target, baseRequest,
+                                            request,
+                                            response);
+                                } else {
+                                    //Http Https
+                                    r = api_process(request, response);
+                                }
+                            } else if (path.endsWith(".html") || path.endsWith(".js")) {
+                                // html processor
+                                r = html_api_process(request, response);
                             }
                             if (baseRequest.isHandled()) {
                             } else if (r !== null) {
@@ -1029,7 +1116,7 @@ if (JType) {
                 try {
                     var vs = [];
                     var c = 0;
-                    var dt = java.lang.System.currentTimeMillis();
+                    var dt = sys.now();
                     hijk.db.cube(function(box) {
                         box.select(ql, args, function(v) {
                             vs.push(JType.JSONLocal(v));
@@ -1038,7 +1125,7 @@ if (JType) {
                             }
                         });
                     });
-                    dt = (java.lang.System.currentTimeMillis() - dt) / 1000.0;
+                    dt = (sys.now() - dt) / 1000.0;
                     for (var i = 0; i < vs.length; i++) {
                         if (script.get().length > 2) {
                             script.set("");
@@ -1074,7 +1161,6 @@ if (JType) {
             }
         }
         );
-
         function help() {
             print("");
             print(tables.join(' '));
@@ -1084,7 +1170,6 @@ if (JType) {
             print(":");
         }
         help();
-
         while (true) {
             var c = String.fromCharCode(java.lang.System.in.read());
             script.set(script.get() + c);
@@ -1096,6 +1181,9 @@ if (JType) {
                 if (count <= 0) {
                     try {
                         var s = script.get().toString().trim();
+                        while (s[0] === ';') {
+                            s = s.substring(1);
+                        }
                         if (s[0] === '(') {
                             s = s.substr(1, s.length - 2);
                         }
@@ -1103,7 +1191,6 @@ if (JType) {
                                 s + " })()";
                         script.set("");
                         count = 0;
-
                         eval(s);
                     } catch (e) {
                         print("[" + e.message + "]");
@@ -1124,23 +1211,20 @@ if (JType) {
     };
     var DebugEditor = function(map, request, response) {
         var fname = request.getRequestURI().replaceAll("/edit/", "");
-        if (((!fname.startsWith("js/")) && (!fname.startsWith("html/"))) || (fname.contains(".."))) {
+        if ((!fname.startsWith("js/")) && (!fname.startsWith("html/"))) {
             return "Error Path , example edit/js/demo.js ,  edit/html/index.html ";
         }
-        var TypeRandomAccessFile = Java.type("java.io.RandomAccessFile");
-        var TypeBytes = Java.type("byte[]");
-        var TypeFile = Java.type("java.io.File");
-        var TypeString = Java.type("java.lang.String");
-
-        function read_file(path) {
-            return JType.readfile(path);
+        if (fname.contains("..")) {
+            return "";
         }
-
+        function read_file(path) {
+            return JType.file(path).html;
+        }
         function write_file(path, txt, append) {
             if (append) {
                 txt = "\r\n//----" + (new Date()) + "----\r\n" + txt;
             }
-            return JType.writefile(path, txt, append);
+            return  JType.file(path).write(txt, append);
         }
 
         var msg = "";
@@ -1166,11 +1250,8 @@ if (JType) {
                 "</form></body></html>";
         return html;
     };
-
     try {
-        var sys = JType;
         var jsload = load_system;
-
         if (hijk.debug) {
             debug_load_system();
         } else {
@@ -1184,5 +1265,6 @@ if (JType) {
         run_script();
     } catch (e) {
         print(toExceptionString(e));
+        throw e;
     }
 }
