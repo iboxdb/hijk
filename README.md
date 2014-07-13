@@ -8,7 +8,6 @@
 2. **jjs** build.js
 3. run.bat
 
- 
 #####Write a Javascript File, demo.js
 
 ```
@@ -30,7 +29,6 @@ hijk.api.helloworld3 = function() {
 3. use /edit/js/demo.js that can edit files online, 
 
 ![PIC](https://github.com/iboxdb/hijk/raw/master/html/images/HIJK.png)
-
 
 ####Creating HTML to call WebAPI methods, index.html
 
@@ -60,7 +58,6 @@ hijk.api.helloworld3 = function() {
 2. open browser and input http://localhost:8080
 3. click image
 
- 
 ####WebAPI Arguments
 
 ```
@@ -77,7 +74,6 @@ hijk.api.get = function(map,request) {
 1. save
 2. open browser and input http://localhost:8080/api/get?id=99&name=andy
 
-
 ####WebSocket WebAPI
 
 ```
@@ -89,16 +85,39 @@ hijk.api.ws_helloname = function(socket, request, response) {
 };
 ```
 
-
-####WebAPI Bridge
-
+####JSON HTML Page Template
 ```
-hijk.api.get_bridge = function() {
-    var msg = JType.http.post("http://localhost:8080/api/get", {name: 'Andy', id: 100});
-    return "Bridge:" + msg;
-};
-```
+<div>
+  <h3>Hello {{name}} !</h3>
+  {{#keys}}
+    <p> {{key}}={{value}} </p>
+  {{/keys}}
+</div>
 
+<script>
+   DoRender({
+     name: "World",
+     keys: [{key: 'mydb', value: 25}, {key: 'yourdb', value: 35}]
+   });
+</script>     
+```        
+
+####Dynamic HTML Function
+```
+hijk.api["/table1_template.html"] = function(file, map, request) {
+    function demo_server_template_processor(html, json) {
+        html = html.replaceFirst("<head>",
+                "<head><title>Server Process -" + json.record.name + "</title>" +
+                "<meta name='keywords' content='HIJK JavaScript WebAPI " + json.record.id + "' />" +
+                "<meta name='Description' content='HIJK HTML WebAPI Demo for template' />");
+        return html;
+    }
+    var html = file.html;
+    var json = hijk.api.table1_template_json(map, request);
+    html = demo_server_template_processor(html, json);
+    return html;
+}
+```
 
 ####Define Database's Table
 
@@ -143,6 +162,15 @@ hijk.api.table1_select_sum = function() {
 ```
 
 ####More Usages
+#####WebAPI Bridge
+
+```
+hijk.api.get_bridge = function() {
+    var msg = JType.http.post("http://localhost:8080/api/get", {name: 'Andy', id: 100});
+    return "Bridge:" + msg;
+};
+```
+
 ######JavaScript Multi-Thread
 
 ```
