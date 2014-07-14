@@ -52,9 +52,9 @@
     </head>
     <body>
         <br>
-        <button onclick="update()">Update</button> <br>
-        Press [F5] to refresh page title and content <br>
-        Or click [Update] using ajax to refresh content.
+         <br>
+        Press <a href="table1_template.html">[F5]</a> to refresh page title and content <br>
+        Or click <button onclick="update()">Update</button> using ajax to refresh content.
 
         <div id="target">loading</div>
 
@@ -62,13 +62,13 @@
 
         <!-- template div, the last div   -->
         <div id="template" >        
-            <h3>Hello[ {{record.name}} ]</h3>
+            <h3>Hello  [ {{record.name}} ] !</h3>
             MORE RECORDS:
             <table >       
                 {{#more}}
                 <tr {{{color}}}  >
                     <td>
-                        {{id}} 
+                        <a href="table1_template.html?id={{id}}"> {{id}} </a> 
                     </td>
                     <td>{{{nameformat}}}</td>
                     <td>{{fieldA}}</td>
