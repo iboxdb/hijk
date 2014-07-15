@@ -36,12 +36,15 @@ hijk.api.helloworld3 = function() {
 <html> 
     <script  type="text/javascript">
         function hello() {
+            request("/api/helloworld2", function(o) { alert(o.MSG); });
+        }
+        function request(api, fun) {
             var req = new XMLHttpRequest();
-            req.open("GET", "/api/helloworld2", true);
+            req.open("GET", api, true);
             req.onreadystatechange = function() {
-                if (req.readyState === 4 && (req.status === 200)) {
+                if (req.readyState === 4 && (req.status === 304 || req.status === 200)) {
                     var o = eval("(" + req.responseText + ")");
-                    alert(o.MSG);
+                    fun(o);
                 }
             };
             req.send();
@@ -162,7 +165,7 @@ hijk.api.table1_select_sum = function() {
 ```
 
 ####More Usages
-#####WebAPI Bridge
+######WebAPI Bridge
 
 ```
 hijk.api.get_bridge = function() {
@@ -171,7 +174,7 @@ hijk.api.get_bridge = function() {
 };
 ```
 
-#####File Upload
+######File Upload
 ```
 hijk.api.upload = function(map, request) {
    sys.upload(request, function(file) { 
