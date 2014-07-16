@@ -6,7 +6,7 @@
 
 1. set PATH to /JAVA **8**_HOME/bin
 2. **jjs** build.js
-3. run.bat
+3. run.bat/.sh
 
 #####Write a Javascript File, demo.js
 
@@ -42,7 +42,7 @@ hijk.api.helloworld3 = function() {
             var req = new XMLHttpRequest();
             req.open("GET", api, true);
             req.onreadystatechange = function() {
-                if (req.readyState === 4 && (req.status === 304 || req.status === 200)) {
+                if (req.readyState === 4 && req.status === 200) {
                     var o = eval("(" + req.responseText + ")");
                     fun(o);
                 }
@@ -66,7 +66,7 @@ hijk.api.helloworld3 = function() {
 ```
 hijk.api.get = function(map,request) {
     var msg = {
-        url: request.getRequestURI(),
+        uri: request.requestURI,
         id : map.id[0],
         name: map.name[0] 
     };
@@ -169,7 +169,7 @@ hijk.api.table1_select_sum = function() {
 
 ```
 hijk.api.get_bridge = function() {
-    var msg = JType.http.post("http://localhost:8080/api/get", {name: 'Andy', id: 100});
+    var msg = sys.http.post("http://localhost:8080/api/get", {name: 'Andy', id: 100});
     return "Bridge:" + msg;
 };
 ```
