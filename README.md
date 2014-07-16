@@ -1,4 +1,4 @@
-###hijk Javascript WebAPI Development Package
+###HIJK Javascript WebAPI Development Package
 
 ####Getting Started
 
@@ -122,7 +122,7 @@ hijk.api["/table1_template.html"] = function(file, map, request) {
 }
 ```
 
-####Define Database's Table
+####Define Database Table
 
 ```
 hijk.table.table1 = {
