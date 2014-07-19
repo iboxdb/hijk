@@ -231,7 +231,16 @@ hijk.api.processes = function()
 }            
 ```
 
-######Fast System Backup, Copy Only ALL-in-ONE
+######Cache Setting
+
+```
+//Max Cache, run.bat/sh -> jjs -J-Xmx8g -cp ... build.js
+hijk.dbCachePageCount = java.lang.Integer.MAX_VALUE;
+//Min Cache
+hijk.dbCachePageCount = 1024;
+```
+
+######Easily System Backup, Copy Only ALL-in-ONE
 
 ```
 1. cp -r /path/hijk /backup
