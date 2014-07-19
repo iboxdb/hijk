@@ -201,12 +201,9 @@ hijk.api.multi_thread = function() {
         results.put("T02-" + c);
     });
 
-    var rs = [];
-    var bg = Date.now();
+    var rs = []; 
     rs.push(results.take());
-    rs.push(results.take());
-    rs.push(Date.now() - bg);
-
+    rs.push(results.take()); 
     return rs;
 };
 ```
@@ -232,6 +229,13 @@ hijk.api.processes = function()
             
     remote_process.send({action: 'ping', msg: 'hello'});        
 }            
+```
+
+######Fast System Backup, Copy Only ALL-in-ONE
+
+```
+1. cp -r /path/hijk /backup
+2. tar -cf /backup/hijk.tar -C /path hijk
 ```
 
 ####Benchmark, Select Record from Database
