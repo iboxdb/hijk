@@ -1,4 +1,4 @@
-###HIJK Javascript WebAPI Development Package
+###HIJK JavaScript WebAPI ALL-in-ONE Development Package
 
 ####Getting Started
 
@@ -237,7 +237,7 @@ hijk.api.processes = function()
 //Max Cache, run.bat/sh -> jjs -J-Xmx8g -cp ... build.js
 hijk.dbCachePageCount = java.lang.Integer.MAX_VALUE;
 //Min Cache
-hijk.dbCachePageCount = 1024;
+hijk.dbCachePageCount = 16;
 ```
 
 ######Easily System Backup, Copy Only ALL-in-ONE
