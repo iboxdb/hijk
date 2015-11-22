@@ -22,7 +22,7 @@ print("-----------------------");
 var hijk = {
     debug: true,
     title: "html iboxdb javascript kits",
-    version: "0.4",
+    version: "0.4.1",
     server: {
         port: 8080,
         sslport: 8081,
@@ -31,8 +31,8 @@ var hijk = {
         threadCount: 512,
         server: null
     },
-    //Max Cache  java.lang.Integer.MAX_VALUE
-    dbCachePageCount: -1,
+    //Max Cache MB
+    dbCacheLength: -1,
     //Thread Count Max=99
     dbReadStreamCount: -1,
     //file path
@@ -167,7 +167,7 @@ try {
             var al = new java.util.concurrent.atomic.AtomicLong();
             return function() {
                 return al.incrementAndGet();
-            }
+            };
         })(),
         proxy: function(value) {
             var ap = new java.util.concurrent.atomic.AtomicReference(value);
@@ -265,7 +265,7 @@ try {
                                 write: function(path) {
                                     this.fileItem.write(new File(path));
                                 }
-                            }
+                            };
                             fun(f);
                         }
                     }
@@ -612,8 +612,9 @@ if (JType) {
     var load_system = function(exjs) {
         function load_system_inner() {
 
-            function boxwrap(_box) {
+            function boxwrap(_box,_db) {
                 this.box = _box;
+                this.db = _db;
             }
             boxwrap.prototype = {
                 insert: function(table, value) {
@@ -659,23 +660,26 @@ if (JType) {
                         pos = 0;
                     }
                     return JType.int(this.box.newId(pos, 1));
+                },
+                getSchemata : function(){
+                    return this.db.getSchemata();
                 }
             };
-            function dbwrap(db) {
+            function dbwrap(auto) {
                 this.close = function() {
-                    db.getDatabase().close();
+                    auto.getDatabase().close();
                 };
                 this.insert = function(table, value) {
                     if (!(value instanceof Array)) {
                         value = [value];
                     }
-                    return db.insert(table, JType.MapArray(value));
+                    return auto.insert(table, JType.MapArray(value));
                 };
                 this.select = function(ql, params, fun) {
                     if (!(params instanceof Array)) {
                         params = [params];
                     }
-                    var r = db.select(ql, params);
+                    var r = auto.select(ql, params);
                     if (fun) {
                         JType.ForEach(r, fun);
                     }
@@ -685,43 +689,43 @@ if (JType) {
                     if (!(params instanceof Array)) {
                         params = [params];
                     }
-                    var r = db.selectCount(ql, params);
+                    var r = auto.selectCount(ql, params);
                     return r;
                 };
                 this.selectKey = function(table, key) {
                     if (!(key instanceof Array)) {
                         key = [key];
                     }
-                    return db.selectKey(table, Java.to(key));
+                    return auto.selectKey(table, Java.to(key));
                 };
                 this.update = function(table, value) {
                     if (!(value instanceof Array)) {
                         value = [value];
                     }
-                    return db.update(table, JType.MapArray(value));
+                    return auto.update(table, JType.MapArray(value));
                 };
                 this.replace = function(table, value) {
                     if (!(value instanceof Array)) {
                         value = [value];
                     }
-                    return db.replace(table, JType.MapArray(value));
+                    return auto.replace(table, JType.MapArray(value));
                 };
                 this.delete = function(table, key) {
                     if (!(key instanceof Array)) {
                         key = [key];
                     }
-                    return db.delete(table, Java.to(key));
+                    return auto.delete(table, Java.to(key));
                 };
                 this.id = function(pos) {
                     if (pos === undefined) {
                         pos = 0;
                     }
-                    return db.id(pos);
+                    return JType.int(auto.newId(pos));
                 };
                 this.cube = function(transaction) {
-                    var box = db.cube();
+                    var box = auto.cube();
                     try {
-                        var wbox = new boxwrap(box);
+                        var wbox = new boxwrap(box,auto.getDatabase());
                         if (transaction(wbox)) {
                             return box.commit().toString();
                         }
@@ -736,10 +740,10 @@ if (JType) {
                 var TypeDB = Java.type("iBoxDB.LocalServer.DB");
                 TypeDB.root("iboxdb/");
                 var db = new TypeDB(hijk.dbaddress);
-                var config = db.getConfig().Config;
-                if (hijk.dbCachePageCount > 0) {
-                    var ccfield = config.getClass().getField('CachePageCount');
-                    ccfield.set(config, JType.int(hijk.dbCachePageCount));
+                var config = db.getConfig().DBConfig;
+                if (hijk.dbCacheLength > 0) {
+                    var ccfield = config.getClass().getField('CacheLength');
+                    ccfield.set(config, config.mb(hijk.dbCacheLength));
                 }
 
                 if (hijk.dbReadStreamCount > 0) {
@@ -1158,9 +1162,11 @@ if (JType) {
 
         var tables = ["TableNames:"];
         hijk.db.cube(function(tran) {
-            var schemas = tran.box.GetSchemas();
-            for (var name in schemas) {
-                tables.push(name);
+            var schemata = tran.getSchemata();
+            for (var name in schemata) {
+                if ( !name.startsWith("_")){
+                   tables.push(name);
+                }
             }
         }
         );
